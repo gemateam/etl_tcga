@@ -6,7 +6,7 @@ FROM python:3.12-slim-bookworm
 # Variables de entorno
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
+    PYTHONPATH=/app:/app/src \
     DATA_DIR=/data \
     SQL_DIR=/sql
 
@@ -24,15 +24,19 @@ RUN groupadd --gid 10001 app \
 WORKDIR /app
 
 # ========== INSTALAR DEPENDENCIAS WEB ==========
-COPY web/pyproject.toml web/uv.lock ./web-uv.lock
-# Instalar dependencias web
-RUN pip install --no-cache-dir --upgrade pip \
-    && bash -c "pip install --no-cache-dir -r <(grep -v '^#' /app/web-uv.lock | grep -v '^$' | awk -F'=' '{print \$1}')"
+# uv.lock es TOML (no un requirements.txt), por eso se exporta con uv
+RUN pip install --no-cache-dir --upgrade pip uv
+COPY web/pyproject.toml web/uv.lock /tmp/web/
+RUN cd /tmp/web \
+    && uv export --frozen --no-dev --no-hashes --no-emit-project -o /tmp/web-requirements.txt \
+    && pip install --no-cache-dir -r /tmp/web-requirements.txt
 
 # ========== INSTALAR DEPENDENCIAS ETL ==========
-COPY etl/pyproject.toml etl/uv.lock ./etl-uv.lock
-# Instalar dependencias ETL
-RUN bash -c "pip install --no-cache-dir -r <(grep -v '^#' /app/etl-uv.lock | grep -v '^$' | awk -F'=' '{print \$1}')"
+COPY etl/pyproject.toml etl/uv.lock /tmp/etl/
+RUN cd /tmp/etl \
+    && uv export --frozen --no-dev --no-hashes --no-emit-project -o /tmp/etl-requirements.txt \
+    && pip install --no-cache-dir -r /tmp/etl-requirements.txt \
+    && rm -rf /tmp/web /tmp/etl /tmp/*-requirements.txt
 
 # ========== COPIAR CÓDIGO ==========
 # Copiar aplicación web
