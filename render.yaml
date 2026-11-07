@@ -1,21 +1,82 @@
-# Simple Render Blueprint for testing
+# Render Blueprint: TCGA Medallion
+# https://dashboard.render.com/blueprints
+# Configuración: PostgreSQL administrado + Web Service + Worker
+
 version: "1"
 services:
-  - type: postgresql
-    name: tcga-postgres
-    plan: free
-    databaseName: tcga
-    user: tcga_admin
-
+  # Servicio web (FastAPI + Jinja2 + HTMX + Plotly)
   - type: web
     name: tcga-web
     plan: free
     dockerfilePath: ./web/Dockerfile.render
     startCommand: /app/start.sh
     healthCheckPath: /health
+    envVars:
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: tcga-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: tcga-postgres
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: tcga-postgres
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: tcga-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: tcga-postgres
+          property: password
+      - key: DUCKDB_MEMORY_LIMIT
+        value: 512MB
+      - key: DUCKDB_THREADS
+        value: "2"
+      - key: GDC_PROJECTS
+        value: TCGA-BRCA
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATA_DIR
+        value: /data
+      - key: SQL_DIR
+        value: /sql
 
+  # Worker para ETL (ejecución manual)
   - type: worker
     name: tcga-etl
     plan: free
     dockerfilePath: ./etl/Dockerfile.render
     startCommand: /app/entrypoint.sh tcga --help
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tcga-postgres
+          property: connectionString
+      - key: GDC_PROJECTS
+        value: TCGA-BRCA
+      - key: DUCKDB_MEMORY_LIMIT
+        value: 512MB
+      - key: DUCKDB_THREADS
+        value: "2"
+      - key: GDC_DOWNLOAD_WORKERS
+        value: "2"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATA_DIR
+        value: /data
+      - key: SQL_DIR
+        value: /sql
+
+databases:
+  # Base de datos PostgreSQL administrada
+  - name: tcga-postgres
+    plan: free
+    databaseName: tcga
+    user: tcga_admin
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: everywhere
