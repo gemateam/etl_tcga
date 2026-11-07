@@ -25,14 +25,14 @@ WORKDIR /app
 
 # ========== INSTALAR DEPENDENCIAS WEB ==========
 COPY web/pyproject.toml web/uv.lock ./
-# Instalar dependencias web
+# Instalar dependencias web - usar bash para process substitution
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r <(grep -v '^#' web/uv.lock | grep -v '^$' | awk -F'=' '{print $1}')
+    && bash -c "pip install --no-cache-dir -r <(grep -v '^#' web/uv.lock | grep -v '^$' | awk -F'=' '{print \$1}')"
 
 # ========== INSTALAR DEPENDENCIAS ETL ==========
 COPY etl/pyproject.toml etl/uv.lock ./
 # Instalar dependencias ETL
-RUN pip install --no-cache-dir -r <(grep -v '^#' etl/uv.lock | grep -v '^$' | awk -F'=' '{print $1}')
+RUN bash -c "pip install --no-cache-dir -r <(grep -v '^#' etl/uv.lock | grep -v '^$' | awk -F'=' '{print \$1}')"
 
 # ========== COPIAR CÓDIGO ==========
 # Copiar aplicación web
