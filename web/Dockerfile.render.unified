@@ -24,15 +24,15 @@ RUN groupadd --gid 10001 app \
 WORKDIR /app
 
 # ========== INSTALAR DEPENDENCIAS WEB ==========
-COPY web/pyproject.toml web/uv.lock ./
-# Instalar dependencias web - usar bash para process substitution
+COPY web/pyproject.toml web/uv.lock ./web-uv.lock
+# Instalar dependencias web
 RUN pip install --no-cache-dir --upgrade pip \
-    && bash -c "pip install --no-cache-dir -r <(grep -v '^#' web/uv.lock | grep -v '^$' | awk -F'=' '{print \$1}')"
+    && bash -c "pip install --no-cache-dir -r <(grep -v '^#' /app/web-uv.lock | grep -v '^$' | awk -F'=' '{print \$1}')"
 
 # ========== INSTALAR DEPENDENCIAS ETL ==========
-COPY etl/pyproject.toml etl/uv.lock ./
+COPY etl/pyproject.toml etl/uv.lock ./etl-uv.lock
 # Instalar dependencias ETL
-RUN bash -c "pip install --no-cache-dir -r <(grep -v '^#' etl/uv.lock | grep -v '^$' | awk -F'=' '{print \$1}')"
+RUN bash -c "pip install --no-cache-dir -r <(grep -v '^#' /app/etl-uv.lock | grep -v '^$' | awk -F'=' '{print \$1}')"
 
 # ========== COPIAR CÓDIGO ==========
 # Copiar aplicación web
