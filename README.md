@@ -472,3 +472,26 @@ Si utilizas estos datos en una publicación científica, por favor cita:
 ## Licencia
 
 El código de este repositorio se distribuye bajo la licencia MIT. Los datos del TCGA están sujetos a la política de uso del GDC indicada arriba.
+---
+
+## Despliegue en Render
+
+El proyecto incluye configuración para desplegar en **Render** (https://render.com) usando Blueprints. La configuración está en [`render.yaml`](./render.yaml) y tiene:
+
+1. **PostgreSQL administrado** (plan gratis)
+2. **Web Service** (FastAPI en puerto dinámico)
+3. **Worker/Job** para ejecutar el ETL manualmente
+
+Consulta las instrucciones detalladas en [README_RENDER.md](./README_RENDER.md).
+
+### Enlaces rápidos
+- [Blueprint `render.yaml`](./render.yaml) - Configuración automática
+- [Dockerfile para Render (web)](./web/Dockerfile.render)
+- [Dockerfile para Render (ETL)](./etl/Dockerfile.render)
+- [Instrucciones completas](./README_RENDER.md)
+
+---
+
+## Desarrollo y contribución
+
+Para sugerencias o problemas, abre un issue en el repositorio.

@@ -1,0 +1,79 @@
+# Dockerfile para ETL (Render Worker/Job)
+# Basado en etl/Dockerfile pero adaptado:
+# - Instala dependencias con pip (sin uv)
+# - Script para parsear DATABASE_URL de Render
+# - Ejecutable para job manual
+
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUERRED=1 \
+    PYTHONPATH=/app \
+    DATA_DIR=/data \
+    SQL_DIR=/sql \
+    GDC_PROJECTS=TCGA-BRCA
+
+# Instalar herramientas necesarias: curl para health checks, psql opcional
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear usuario no-root
+RUN groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid app --create-home --home-dir /home/app app \
+    && mkdir -p /data /app /sql \
+    && chown -R app:app /data /app /sql
+
+WORKDIR /app
+
+# Copiar dependencias primero
+COPY etl/pyproject.toml etl/uv.lock ./
+# Instalar dependencias con pip
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r <(grep -v '^#' uv.lock | grep -v '^$' | awk -F'=' '{print $1}')
+
+# Copiar código
+COPY etl/src /app/src
+COPY sql /sql
+
+# Script para convertir DATABASE_URL a variables PostgreSQL
+COPY <<'EOF' /app/parse_db_url.py
+#!/usr/bin/env python3
+import os, sys, re
+
+db_url = os.environ.get('DATABASE_URL')
+if not db_url:
+    sys.exit(0)
+
+# postgresql://user:pass@host:port/dbname
+match = re.match(r'postgres(?:ql)?://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', db_url)
+if match:
+    user, password, host, port, dbname = match.groups()
+    print(f'POSTGRES_USER={user}')
+    print(f'POSTGRES_PASSWORD={password}')
+    print(f'POSTGRES_HOST={host}')
+    print(f'POSTGRES_PORT={port}')
+    print(f'POSTGRES_DB={dbname}')
+EOF
+
+COPY <<'EOF' /app/entrypoint.sh
+#!/bin/sh
+set -e
+
+# Parse DATABASE_URL si existe (Render inyecta esta variable)
+if [ -n "$DATABASE_URL" ]; then
+    echo "Parsing DATABASE_URL from Render..."
+    eval "$(python /app/parse_db_url.py)"
+fi
+
+# Ejecutar comando pasado como argumento
+exec "$@"
+EOF
+
+RUN chmod +x /app/parse_db_url.py /app/entrypoint.sh \
+    && chown -R app:app /app /sql
+
+USER app
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["tcga", "--help"]

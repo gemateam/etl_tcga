@@ -1,0 +1,104 @@
+# Render Blueprint: TCGA Medallion
+# https://dashboard.render.com/blueprints
+# Configuración: PostgreSQL administrado + Web Service + Job (ETL)
+
+version: "1"
+services:
+  # Base de datos PostgreSQL administrada (gratis: 1GB RAM, 1GB disco)
+  - type: postgres
+    name: tcga-postgres
+    plan: free
+    databaseName: tcga
+    user: tcga_admin
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: everywhere
+    # Solo variables básicas de conexión; la contraseña se genera automáticamente
+    # y se inyecta como DATABASE_URL y POSTGRES_PASSWORD
+
+  # Servicio web (FastAPI + Jinja2 + HTMX + Plotly)
+  - type: web
+    name: tcga-web
+    plan: free
+    env: python
+    region: oregon  # oregon / ohio / frankfurt / singapore
+    dockerfilePath: ./web/Dockerfile.render
+    dockerContext: .
+    buildCommand: ""
+    startCommand: /app/start.sh
+    # Puerto de Render: $PORT (80 interna, expuesta a internet)
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: RENDER
+        value: true
+      # PostgreSQL connection via database reference
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: tcga-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: tcga-postgres
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: tcga-postgres
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: tcga-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: tcga-postgres
+          property: password
+      # Web-specific config
+      - key: DUCKDB_MEMORY_LIMIT
+        value: 512MB  # menos memoria en Render gratis
+      - key: DUCKDB_THREADS
+        value: "2"
+      - key: GDC_PROJECTS
+        value: TCGA-BRCA
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATA_DIR
+        value: /data
+      - key: SQL_DIR
+        value: /sql
+
+  # Job de ETL (ejecución puntual para poblar la base de datos)
+  # Se ejecuta una vez manualmente después del despliegue
+  - type: worker
+    name: tcga-etl
+    plan: free
+    env: python
+    region: oregon
+    dockerfilePath: ./etl/Dockerfile.render
+    dockerContext: .
+    buildCommand: ""
+    startCommand: /app/entrypoint.sh tcga --help  # solo para mantener el contenedor vivo
+    envVars:
+      - key: RENDER
+        value: true
+      - key: DATA_DIR
+        value: /data
+      - key: SQL_DIR
+        value: /sql
+      - key: GDC_PROJECTS
+        value: TCGA-BRCA
+      - key: DUCKDB_MEMORY_LIMIT
+        value: 512MB
+      - key: DUCKDB_THREADS
+        value: "2"
+      - key: GDC_DOWNLOAD_WORKERS
+        value: "2"
+      - key: GDC_DOWNLOAD_BATCH_BYTES
+        value: "500000000"  # 500 MB por batch (más pequeño para memoria limitada)
+      - key: LOG_LEVEL
+        value: INFO
+      # PostgreSQL connection via DATABASE_URL (Render inyecta automáticamente)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tcga-postgres
+          property: connectionString
