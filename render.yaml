@@ -1,15 +1,16 @@
 # Render Blueprint: TCGA Medallion
 # https://dashboard.render.com/blueprints
-# Configuración: PostgreSQL administrado + Web Service + Worker
+# Plan gratis: PostgreSQL + Web Service (no workers disponibles)
 
 version: "1"
 services:
   # Servicio web (FastAPI + Jinja2 + HTMX + Plotly)
+  # También ejecutará el ETL manualmente via shell
   - type: web
     name: tcga-web
     plan: free
     runtime: docker
-    dockerfilePath: ./web/Dockerfile.render
+    dockerfilePath: ./web/Dockerfile.render.unified
     healthCheckPath: /health
     envVars:
       - key: POSTGRES_HOST
@@ -44,32 +45,13 @@ services:
         value: /data
       - key: SQL_DIR
         value: /sql
-
-  # Worker para ETL (ejecución manual)
-  - type: worker
-    name: tcga-etl
-    plan: free
-    runtime: docker
-    dockerfilePath: ./etl/Dockerfile.render
-    envVars:
+      - key: RENDER_DEPLOYMENT
+        value: "true"
+      # Para ETL manual
       - key: DATABASE_URL
         fromDatabase:
           name: tcga-postgres
           property: connectionString
-      - key: GDC_PROJECTS
-        value: TCGA-BRCA
-      - key: DUCKDB_MEMORY_LIMIT
-        value: 512MB
-      - key: DUCKDB_THREADS
-        value: "2"
-      - key: GDC_DOWNLOAD_WORKERS
-        value: "2"
-      - key: LOG_LEVEL
-        value: INFO
-      - key: DATA_DIR
-        value: /data
-      - key: SQL_DIR
-        value: /sql
 
 databases:
   # Base de datos PostgreSQL administrada

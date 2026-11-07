@@ -1,0 +1,95 @@
+# Dockerfile unificado para Render (Web + ETL)
+# Basado en web/Dockerfile.render pero con herramientas ETL incluidas
+
+FROM python:3.12-slim-bookworm
+
+# Variables de entorno
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    DATA_DIR=/data \
+    SQL_DIR=/sql
+
+# Instalar curl para health checks y herramientas básicas
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear usuario no-root
+RUN groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid app --create-home --home-dir /home/app app \
+    && mkdir -p /data /app /sql \
+    && chown -R app:app /data /app /sql
+
+WORKDIR /app
+
+# ========== INSTALAR DEPENDENCIAS WEB ==========
+COPY web/pyproject.toml web/uv.lock ./
+# Instalar dependencias web
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r <(grep -v '^#' web/uv.lock | grep -v '^$' | awk -F'=' '{print $1}')
+
+# ========== INSTALAR DEPENDENCIAS ETL ==========
+COPY etl/pyproject.toml etl/uv.lock ./
+# Instalar dependencias ETL
+RUN pip install --no-cache-dir -r <(grep -v '^#' etl/uv.lock | grep -v '^$' | awk -F'=' '{print $1}')
+
+# ========== COPIAR CÓDIGO ==========
+# Copiar aplicación web
+COPY web/app /app/app
+# Copiar código ETL
+COPY etl/src /app/src
+# Copiar SQL scripts
+COPY sql /sql
+
+# ========== SCRIPT PARA PARSEAR DATABASE_URL ==========
+COPY <<'EOF' /app/parse_db_url.py
+#!/usr/bin/env python3
+import os, sys, re
+
+db_url = os.environ.get('DATABASE_URL')
+if not db_url:
+    sys.exit(0)
+
+# postgresql://user:pass@host:port/dbname
+match = re.match(r'postgres(?:ql)?://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', db_url)
+if match:
+    user, password, host, port, dbname = match.groups()
+    print(f'POSTGRES_USER={user}')
+    print(f'POSTGRES_PASSWORD={password}')
+    print(f'POSTGRES_HOST={host}')
+    print(f'POSTGRES_PORT={port}')
+    print(f'POSTGRES_DB={dbname}')
+EOF
+
+# ========== SCRIPT DE INICIO UNIFICADO ==========
+COPY <<'EOF' /app/start.sh
+#!/bin/sh
+set -e
+
+# Parse DATABASE_URL si existe (Render inyecta esta variable)
+if [ -n "$DATABASE_URL" ]; then
+    echo "Parsing DATABASE_URL from Render..."
+    eval "$(python /app/parse_db_url.py)"
+fi
+
+# Si se pasa un comando, ejecutarlo (para ETL)
+if [ "$1" = "tcga" ]; then
+    shift
+    exec python -m tcga.cli "$@"
+fi
+
+# Si no, iniciar la web
+exec uvicorn app.main:app --host 0.0.0.0 --port $PORT
+EOF
+
+RUN chmod +x /app/start.sh /app/parse_db_url.py \
+    && chown -R app:app /app /sql
+
+USER app
+
+# Health check
+HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=5 \
+    CMD python -c "import os, urllib.request; port=os.environ.get('PORT', '8000'); urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=3)"
+
+CMD ["/app/start.sh"]
