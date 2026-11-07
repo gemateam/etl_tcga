@@ -16,10 +16,20 @@ class WebSettings:
 
     @classmethod
     def from_env(cls) -> "WebSettings":
-        database_url = os.getenv("WEB_DATABASE_URL")
+        # Render inyecta DATABASE_URL directamente; también soportamos WEB_DATABASE_URL
+        database_url = os.getenv("WEB_DATABASE_URL") or os.getenv("DATABASE_URL")
         if not database_url:
-            user = os.getenv("WEB_DB_USER", "web_ro")
-            password = os.getenv("WEB_DB_PASSWORD", "web_ro_password")
+            # WEB_DB_USER/WEB_DB_PASSWORD (local) o POSTGRES_USER/POSTGRES_PASSWORD (Render)
+            user = (
+                os.getenv("WEB_DB_USER")
+                or os.getenv("POSTGRES_USER")
+                or "web_ro"
+            )
+            password = (
+                os.getenv("WEB_DB_PASSWORD")
+                or os.getenv("POSTGRES_PASSWORD")
+                or "web_ro_password"
+            )
             host = os.getenv("POSTGRES_HOST", "postgres")
             port = os.getenv("POSTGRES_PORT", "5432")
             database = os.getenv("POSTGRES_DB", "tcga")
