@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Mutaciones · TCGA Medallion{% endblock %}
+{% block head %}<script src="/static/vendor/plotly.min.js"></script>{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Mutaciones somáticas — Población hispana / latina</h1>
+  <p class="muted">
+    Variantes de ADN somáticas (MAF masked, acceso abierto) en casos TCGA-BRCA
+    con etnicidad <em>hispanic or latino</em>.
+  </p>
+</section>
+
+{% if not top_genes and not variant_types %}
+<div class="empty">
+  <h2>Todavía no hay datos de mutaciones</h2>
+  <p>Ejecuta el pipeline de mutaciones para poblar las tablas:</p>
+  <pre>tcga extract-maf-manifest --project TCGA-BRCA
+tcga bronze-mutations --project TCGA-BRCA
+tcga silver-mutations --project TCGA-BRCA</pre>
+  <p class="muted">O con el pipeline completo: <code>tcga run --project TCGA-BRCA</code></p>
+</div>
+{% else %}
+
+{# ----- KPIs ----- #}
+<div class="grid cards-4">
+  <div class="card">
+    <span class="label">Casos hispanos/latinos</span>
+    <strong class="big">{{ total_cases_hispanic | fmt }}</strong>
+    <small class="muted">en {{ project or 'TCGA-BRCA' }}</small>
+  </div>
+  <div class="card">
+    <span class="label">Mutaciones (PASS)</span>
+    <strong class="big">{{ total_mutations | fmt }}</strong>
+    <small class="muted">variantes somáticas filtradas</small>
+  </div>
+  <div class="card">
+    <span class="label">Genes en top 25</span>
+    <strong class="big">{{ top_genes | length }}</strong>
+    <small class="muted">ordenados por casos afectados</small>
+  </div>
+  <div class="card">
+    <span class="label">Tipos de variante</span>
+    <strong class="big">{{ variant_types | length }}</strong>
+    <small class="muted">clasificaciones únicas</small>
+  </div>
+</div>
+
+{# ----- Top genes ----- #}
+<div class="grid cards-2">
+  <section class="card">
+    <h2>Top 25 genes mutados</h2>
+    <div id="chart-genes" class="chart tall"></div>
+    <p class="muted">Número de casos con al menos una mutación en cada gen.</p>
+  </section>
+
+  <section class="card">
+    <h2>Distribución por clasificación de variante</h2>
+    <div id="chart-vc" class="chart tall"></div>
+    <p class="muted">Total de mutaciones por tipo (Missense, Nonsense, Splice Site, etc.).</p>
+  </section>
+</div>
+
+{# ----- Cromosomas ----- #}
+<section class="card">
+  <h2>Frecuencia por cromosoma</h2>
+  <div id="chart-chrom" class="chart"></div>
+  <p class="muted">Número total de mutaciones por cromosoma en la población hispana/latina.</p>
+</section>
+
+{# ----- Tabla detallada ----- #}
+<section class="card">
+  <div class="row-between">
+    <h2>Detalle — top 25 genes</h2>
+  </div>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Gen</th>
+        <th class="num">Casos afectados</th>
+        <th class="num">% de casos</th>
+        <th class="num">Total mutaciones</th>
+        <th>Clasificaciones</th>
+        <th>Relevancia en CM</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in top_genes %}
+      <tr class="{{ 'highlight' if g.hugo_symbol in genes_clave else '' }}">
+        <td>
+          <strong>{{ g.hugo_symbol }}</strong>
+          {% if g.hugo_symbol in genes_clave %}
+            <span class="badge success">driver</span>
+          {% endif %}
+        </td>
+        <td class="num">{{ g.n_casos | fmt }}</td>
+        <td class="num">
+          <span class="pct-bar" style="--pct: {{ g.pct_casos or 0 }}%">
+            {{ g.pct_casos or '—' }}%
+          </span>
+        </td>
+        <td class="num">{{ g.n_mutaciones | fmt }}</td>
+        <td class="muted small">
+          {{ (g.clasificaciones or []) | join(', ') }}
+        </td>
+        <td class="muted small">
+          {% if g.hugo_symbol == 'PIK3CA' %}Activación oncogénica PI3K/AKT
+          {% elif g.hugo_symbol == 'TP53' %}Supresor tumoral, pérdida de función
+          {% elif g.hugo_symbol == 'CDH1' %}Adhesión celular, subtipo lobular
+          {% elif g.hugo_symbol == 'BRCA1' or g.hugo_symbol == 'BRCA2' %}Reparación DSB, herencia
+          {% elif g.hugo_symbol == 'ERBB2' %}Amplificación HER2
+          {% elif g.hugo_symbol == 'PTEN' %}Supresor PI3K/AKT
+          {% elif g.hugo_symbol == 'AKT1' %}Oncogén PI3K/AKT
+          {% else %}—
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const cfg = {responsive: true, displaylogo: false};
+const layout0 = {
+  margin: {t: 12, r: 12, b: 54, l: 130},
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  plot_bgcolor: 'rgba(0,0,0,0)',
+  font: {color: '#1e293b'},
+  showlegend: false
+};
+
+{% if top_genes_json %}
+const genesData = {{ top_genes_json | safe }};
+if (genesData.length) {
+  const driverSet = new Set(['BRCA1','BRCA2','TP53','PIK3CA','CDH1','ERBB2','PTEN','AKT1']);
+  const colors = genesData.map(r => driverSet.has(r.gene) ? '#0f766e' : '#94a3b8').reverse();
+  Plotly.newPlot('chart-genes', [{
+    type: 'bar',
+    orientation: 'h',
+    y: genesData.map(r => r.gene).reverse(),
+    x: genesData.map(r => r.n_casos).reverse(),
+    text: genesData.map(r => r.pct.toFixed(1) + '%').reverse(),
+    textposition: 'auto',
+    marker: {color: colors}
+  }], Object.assign({}, layout0, {
+    xaxis: {title: 'Casos afectados'},
+    yaxis: {automargin: true}
+  }), cfg);
+}
+{% endif %}
+
+{% if variant_json %}
+const vcData = {{ variant_json | safe }};
+if (vcData.length) {
+  const palette = [
+    '#0f766e','#2563eb','#7c3aed','#db2777','#d97706',
+    '#16a34a','#0891b2','#dc2626','#9333ea','#65a30d'
+  ];
+  Plotly.newPlot('chart-vc', [{
+    type: 'bar',
+    orientation: 'h',
+    y: vcData.map(r => r.vc).reverse(),
+    x: vcData.map(r => r.n).reverse(),
+    marker: {color: vcData.map((_, i) => palette[i % palette.length]).reverse()}
+  }], Object.assign({}, layout0, {
+    xaxis: {title: 'Mutaciones'},
+    yaxis: {automargin: true}
+  }), cfg);
+}
+{% endif %}
+
+{% if chrom_json %}
+const chromData = {{ chrom_json | safe }};
+if (chromData.length) {
+  Plotly.newPlot('chart-chrom', [{
+    type: 'bar',
+    x: chromData.map(r => 'chr' + r.chrom),
+    y: chromData.map(r => r.n),
+    marker: {color: '#2563eb'}
+  }], Object.assign({}, layout0, {
+    margin: {t: 12, r: 12, b: 50, l: 60},
+    xaxis: {title: 'Cromosoma'},
+    yaxis: {title: 'Mutaciones'}
+  }), cfg);
+}
+{% endif %}
+</script>
+{% endblock %}

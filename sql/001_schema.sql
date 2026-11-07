@@ -292,6 +292,86 @@ CREATE INDEX IF NOT EXISTS idx_smv_sample ON gold.sample_marker_values (sample_i
 CREATE INDEX IF NOT EXISTS idx_smv_gene ON gold.sample_marker_values (gene_id);
 CREATE INDEX IF NOT EXISTS idx_smv_case ON gold.sample_marker_values (case_id);
 
+-- ---------------------------------------------------------- bronze.mutations
+CREATE TABLE IF NOT EXISTS bronze.mutations (
+    mutation_id            TEXT NOT NULL,
+    file_id                TEXT NOT NULL,
+    case_id                TEXT,
+    case_submitter_id      TEXT,
+    project_id             TEXT NOT NULL,
+    hugo_symbol            TEXT,
+    entrez_gene_id         TEXT,
+    chromosome             TEXT,
+    start_position         BIGINT,
+    end_position           BIGINT,
+    strand                 TEXT,
+    variant_classification TEXT,
+    variant_type           TEXT,
+    reference_allele       TEXT,
+    tumor_seq_allele2      TEXT,
+    hgvsc                  TEXT,
+    hgvsp_short            TEXT,
+    transcript_id          TEXT,
+    exon_number            TEXT,
+    t_depth                INTEGER,
+    t_ref_count            INTEGER,
+    t_alt_count            INTEGER,
+    n_depth                INTEGER,
+    filter_status          TEXT,
+    gnomad_af              DOUBLE PRECISION,
+    impact                 TEXT,
+    sift                   TEXT,
+    polyphen               TEXT,
+    clin_sig               TEXT,
+    somatic                TEXT,
+    _gdc_data_release      TEXT,
+    _ingested_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (mutation_id, file_id)
+);
+CREATE INDEX IF NOT EXISTS idx_bmut_project ON bronze.mutations (project_id);
+CREATE INDEX IF NOT EXISTS idx_bmut_case    ON bronze.mutations (case_id);
+CREATE INDEX IF NOT EXISTS idx_bmut_gene    ON bronze.mutations (hugo_symbol);
+
+-- ---------------------------------------------------------- silver.mutations
+CREATE TABLE IF NOT EXISTS silver.mutations (
+    mutation_id            TEXT PRIMARY KEY,
+    file_id                TEXT NOT NULL,
+    case_id                TEXT,
+    case_submitter_id      TEXT,
+    project_id             TEXT NOT NULL,
+    hugo_symbol            TEXT,
+    entrez_gene_id         TEXT,
+    chromosome             TEXT,
+    start_position         BIGINT,
+    end_position           BIGINT,
+    strand                 TEXT,
+    variant_classification TEXT,
+    variant_type           TEXT,
+    reference_allele       TEXT,
+    tumor_seq_allele2      TEXT,
+    hgvsc                  TEXT,
+    hgvsp_short            TEXT,
+    transcript_id          TEXT,
+    exon_number            TEXT,
+    t_depth                INTEGER,
+    t_ref_count            INTEGER,
+    t_alt_count            INTEGER,
+    n_depth                INTEGER,
+    filter_status          TEXT,
+    gnomad_af              DOUBLE PRECISION,
+    impact                 TEXT,
+    sift                   TEXT,
+    polyphen               TEXT,
+    clin_sig               TEXT,
+    somatic                TEXT,
+    _gdc_data_release      TEXT,
+    _updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_smut_project ON silver.mutations (project_id);
+CREATE INDEX IF NOT EXISTS idx_smut_case    ON silver.mutations (case_id);
+CREATE INDEX IF NOT EXISTS idx_smut_gene    ON silver.mutations (hugo_symbol);
+CREATE INDEX IF NOT EXISTS idx_smut_vc      ON silver.mutations (variant_classification);
+
 -- --------------------------------------------------------------- permisos
 DO $$
 BEGIN

@@ -8,6 +8,7 @@ from psycopg.errors import UndefinedTable
 
 from .bronze.cases import bronze_cases, bronze_files
 from .bronze.expressions import bronze_expressions
+from .bronze.mutations import bronze_mutations
 from .config import get_settings
 from .db import connect, init_schema
 from .gold.cx_pivot import gold_cx_pivot
@@ -22,10 +23,12 @@ from .gold.top_diagnosis import gold_top_20_diagnosis
 from .landing.cases import extract_cases
 from .landing.expressions import download_expressions
 from .landing.files import extract_files_manifest
+from .landing.mutations import extract_maf_manifest
 from .logging_utils import configure_logging
 from .ops.runs import get_gdc_status, record_gdc_status
 from .silver.case_expressions import silver_case_expressions
 from .silver.clinical import silver_clinical
+from .silver.mutations import silver_mutations
 
 app = typer.Typer(
     add_completion=False,
@@ -117,6 +120,31 @@ def cmd_silver_expressions(
     typer.echo(f"Silver expresiones: {silver_case_expressions(_projects(project))}")
 
 
+@app.command("extract-maf-manifest")
+def cmd_extract_maf(
+    project: list[str] = typer.Option([], "--project", "-p", help="Proyecto TCGA, repetible."),
+) -> None:
+    """L03: descarga el manifiesto de archivos MAF (mutaciones somáticas)."""
+    result = extract_maf_manifest(_projects(project))
+    typer.echo(f"Archivos MAF: {result}")
+
+
+@app.command("bronze-mutations")
+def cmd_bronze_mutations(
+    project: list[str] = typer.Option([], "--project", "-p"),
+) -> None:
+    """B03: descarga y parsea MAFs a Parquet + bronze.mutations."""
+    typer.echo(f"Bronze mutaciones: {bronze_mutations(_projects(project))}")
+
+
+@app.command("silver-mutations")
+def cmd_silver_mutations(
+    project: list[str] = typer.Option([], "--project", "-p"),
+) -> None:
+    """S03: mutaciones normalizadas en silver.mutations (solo PASS, deduplicadas)."""
+    typer.echo(f"Silver mutaciones: {silver_mutations(_projects(project))}")
+
+
 @app.command("silver-clinical")
 def cmd_silver_clinical(
     project: list[str] = typer.Option([], "--project", "-p"),
@@ -181,6 +209,8 @@ def _run_pipeline(
             extract_cases([project])
         for project in projects:
             extract_files_manifest([project])
+        for project in projects:
+            extract_maf_manifest([project])
         download_expressions(projects, limit=limit, retry_failed=retry_failed)
 
     if "bronze" in selected:
@@ -190,11 +220,14 @@ def _run_pipeline(
             bronze_files([project])
         for project in projects:
             bronze_expressions([project])
+        for project in projects:
+            bronze_mutations([project])
 
     if "silver" in selected:
         for project in projects:
             silver_case_expressions([project])
             silver_clinical([project])
+            silver_mutations([project])
 
     if "gold" in selected:
         for project in projects:

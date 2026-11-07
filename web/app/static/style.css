@@ -445,3 +445,43 @@ footer a { color: var(--brand); }
 .dx-badge-secondary { background: #fef3c7; color: #92400e; }
 .dx-row-primary  { background: #f0fdf4 !important; }
 .dx-row-secondary { background: #fffbeb !important; }
+
+
+/* ============================================================
+   Mutaciones hispanas
+   ============================================================ */
+
+/* fila resaltada en tabla de genes driver */
+tr.highlight td { background: #f0fdf4; }
+tr.highlight td:first-child { border-left: 3px solid #0f766e; padding-left: 9px; }
+
+/* barra de porcentaje inline */
+.pct-bar {
+  display: inline-block;
+  position: relative;
+  padding-left: 60px;
+}
+.pct-bar::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 54px;
+  height: 7px;
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+.pct-bar::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: calc(var(--pct, 0%) * 0.54);
+  max-width: 54px;
+  height: 7px;
+  background: #0f766e;
+  border-radius: 4px;
+}
+
+/* gráfica más alta para listas largas */
+.chart.tall { min-height: 440px; }

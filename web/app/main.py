@@ -531,6 +531,128 @@ def case_expression_table(request: Request, case_id: str) -> HTMLResponse:
     )
 
 
+# --------------------------------------------------------- mutaciones hispanas
+@app.get("/mutaciones", response_class=HTMLResponse)
+def mutations_page(request: Request) -> HTMLResponse:
+    project = _project(request)
+    ethnicity_filter = request.query_params.get("etnicidad", "hispanic or latino")
+
+    # Top genes mutados en casos hispanos/latinos
+    top_genes = db.safe_query(
+        """
+        SELECT m.hugo_symbol,
+               count(DISTINCT m.case_id)                              AS n_casos,
+               count(*)                                               AS n_mutaciones,
+               array_agg(DISTINCT m.variant_classification)
+                   FILTER (WHERE m.variant_classification IS NOT NULL) AS clasificaciones,
+               round(100.0 * count(DISTINCT m.case_id)
+                   / nullif((SELECT count(*) FROM silver.cases c2
+                              JOIN silver.cases_demographics d2 USING (case_id)
+                             WHERE lower(d2.ethnicity) = lower(%s)
+                               AND c2.project_id = %s), 0), 1)       AS pct_casos
+        FROM silver.mutations m
+        JOIN silver.cases        c  ON c.case_id  = m.case_id
+        JOIN silver.cases_demographics d ON d.case_id = m.case_id
+        WHERE lower(d.ethnicity) = lower(%s)
+          AND c.project_id = %s
+          AND m.hugo_symbol IS NOT NULL
+        GROUP BY m.hugo_symbol
+        ORDER BY n_casos DESC, n_mutaciones DESC
+        LIMIT 25
+        """,
+        [ethnicity_filter, project, ethnicity_filter, project],
+    ) or []
+
+    # Distribución por tipo de variante
+    variant_types = db.safe_query(
+        """
+        SELECT m.variant_classification,
+               count(*)           AS n_mutaciones,
+               count(DISTINCT m.case_id) AS n_casos
+        FROM silver.mutations m
+        JOIN silver.cases        c  ON c.case_id  = m.case_id
+        JOIN silver.cases_demographics d ON d.case_id = m.case_id
+        WHERE lower(d.ethnicity) = lower(%s)
+          AND c.project_id = %s
+          AND m.variant_classification IS NOT NULL
+        GROUP BY m.variant_classification
+        ORDER BY n_mutaciones DESC
+        """,
+        [ethnicity_filter, project],
+    ) or []
+
+    # Frecuencia por cromosoma
+    by_chrom = db.safe_query(
+        """
+        SELECT m.chromosome,
+               count(*) AS n_mutaciones
+        FROM silver.mutations m
+        JOIN silver.cases        c  ON c.case_id  = m.case_id
+        JOIN silver.cases_demographics d ON d.case_id = m.case_id
+        WHERE lower(d.ethnicity) = lower(%s)
+          AND c.project_id = %s
+          AND m.chromosome IS NOT NULL
+        GROUP BY m.chromosome
+        ORDER BY
+          CASE WHEN m.chromosome ~ '^[0-9]+$' THEN m.chromosome::int ELSE 99 END,
+          m.chromosome
+        """,
+        [ethnicity_filter, project],
+    ) or []
+
+    # Conteo total
+    total_cases_hispanic = db.safe_scalar(
+        """
+        SELECT count(*) FROM silver.cases c
+        JOIN silver.cases_demographics d USING (case_id)
+        WHERE lower(d.ethnicity) = lower(%s) AND c.project_id = %s
+        """,
+        [ethnicity_filter, project],
+    ) or 0
+
+    total_mutations = db.safe_scalar(
+        """
+        SELECT count(*) FROM silver.mutations m
+        JOIN silver.cases c ON c.case_id = m.case_id
+        JOIN silver.cases_demographics d ON d.case_id = m.case_id
+        WHERE lower(d.ethnicity) = lower(%s) AND c.project_id = %s
+        """,
+        [ethnicity_filter, project],
+    ) or 0
+
+    # Genes BRCA1/BRCA2/TP53/PIK3CA para resaltar
+    genes_clave = {"BRCA1", "BRCA2", "TP53", "PIK3CA", "CDH1", "ERBB2", "PTEN", "AKT1"}
+
+    return templates.TemplateResponse(
+        "mutations.html",
+        _ctx(
+            request,
+            active="mutations",
+            project=project,
+            ethnicity_filter=ethnicity_filter,
+            top_genes=top_genes,
+            variant_types=variant_types,
+            by_chrom=by_chrom,
+            total_cases_hispanic=total_cases_hispanic,
+            total_mutations=total_mutations,
+            genes_clave=genes_clave,
+            top_genes_json=json.dumps(
+                [{"gene": r["hugo_symbol"], "n_casos": r["n_casos"],
+                  "pct": float(r["pct_casos"] or 0)} for r in top_genes],
+                default=str,
+            ),
+            variant_json=json.dumps(
+                [{"vc": r["variant_classification"], "n": r["n_mutaciones"]} for r in variant_types],
+                default=str,
+            ),
+            chrom_json=json.dumps(
+                [{"chrom": r["chromosome"], "n": r["n_mutaciones"]} for r in by_chrom],
+                default=str,
+            ),
+        ),
+    )
+
+
 # --------------------------------------------------------------- genes
 @app.get("/api/genes")
 def api_genes(request: Request) -> JSONResponse:
