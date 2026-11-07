@@ -1,0 +1,81 @@
+{# Mini tabla interactiva: top genes por TPM de un archivo de expresión #}
+<div class="expr-table-wrap">
+  <div class="expr-table-controls">
+    <strong class="small">Top genes por TPM</strong>
+    <span class="muted small"> — {{ rows|length }} genes mostrados</span>
+    <div class="expr-filters">
+      <label class="small muted">Tipo:
+        <select
+          hx-get="/casos/{{ case_id }}/expresion/tabla"
+          hx-target="#expr-table-panel"
+          hx-swap="innerHTML"
+          hx-include="[name='limit_sel']"
+          name="gene_type"
+          onchange="this.form && this.form.requestSubmit()">
+          <option value="">Todos</option>
+          {% for gt in gene_types %}
+          <option value="{{ gt }}" {{ 'selected' if gene_type == gt else '' }}>{{ gt }}</option>
+          {% endfor %}
+        </select>
+        <input type="hidden" name="file_id" value="{{ file_id }}">
+      </label>
+      <label class="small muted">Mostrar:
+        <select name="limit_sel"
+          hx-get="/casos/{{ case_id }}/expresion/tabla"
+          hx-target="#expr-table-panel"
+          hx-swap="innerHTML"
+          hx-include="[name='gene_type'],[name='file_id']">
+          {% for n in [25, 50, 100, 200] %}
+          <option value="{{ n }}" {{ 'selected' if limit == n else '' }}>{{ n }}</option>
+          {% endfor %}
+        </select>
+        genes
+      </label>
+    </div>
+  </div>
+
+  {% if rows %}
+  <div class="table-scroll">
+  <table class="table compact expr-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Gen</th>
+        <th>Tipo</th>
+        <th class="num">TPM</th>
+        <th class="num">FPKM</th>
+        <th class="num">Counts</th>
+        <th>Expresión (TPM)</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set max_tpm = rows[0].tpm_unstranded or 1 %}
+    {% for r in rows %}
+    {% set tpm = r.tpm_unstranded or 0 %}
+    {% set bar_pct = (tpm / max_tpm * 100) | round(1) if max_tpm > 0 else 0 %}
+    <tr>
+      <td class="muted small">{{ loop.index }}</td>
+      <td><strong class="mono small">{{ r.gene_name or r.gene_id }}</strong>
+          <div class="muted tiny">{{ r.gene_id }}</div></td>
+      <td><span class="tag">{{ r.gene_type or '—' }}</span></td>
+      <td class="num">{{ '%.2f'|format(tpm) }}</td>
+      <td class="num muted">{{ '%.4f'|format(r.fpkm_unstranded or 0) }}</td>
+      <td class="num muted">{{ r.unstranded | int if r.unstranded is not none else '—' }}</td>
+      <td class="bar-cell">
+        <div class="inline-bar">
+          <div class="inline-bar-fill" style="width: {{ bar_pct }}%"></div>
+        </div>
+      </td>
+      <td>
+        <a href="/genes?gene={{ r.gene_name or r.gene_id }}" class="link tiny" title="Ver en cohorte">cohorte →</a>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="muted">Sin datos para este filtro.</p>
+  {% endif %}
+</div>

@@ -1,0 +1,132 @@
+name: tcga-medallion
+
+services:
+  postgres:
+    image: postgres:16.9-bookworm
+    container_name: tcga-postgres
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tcga}
+      POSTGRES_USER: ${POSTGRES_USER:-tcga_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cambia_esta_clave_postgres}
+      SQL_DIR: /sql
+      TZ: UTC
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/00_roles.sh:/docker-entrypoint-initdb.d/00_roles.sh:ro
+      - ./sql:/sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    networks: [tcga]
+    shm_size: 256mb
+
+  etl:
+    build:
+      context: .
+      dockerfile: etl/Dockerfile
+    image: tcga-medallion-etl:1.0.0
+    container_name: tcga-etl
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      SQL_DIR: /sql
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-tcga}
+      POSTGRES_USER: ${POSTGRES_USER:-tcga_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      GDC_PROJECTS: ${GDC_PROJECTS:-TCGA-BRCA}
+      DUCKDB_MEMORY_LIMIT: ${DUCKDB_MEMORY_LIMIT:-2GB}
+      DUCKDB_THREADS: ${DUCKDB_THREADS:-2}
+      GDC_DOWNLOAD_WORKERS: ${GDC_DOWNLOAD_WORKERS:-2}
+      GDC_DOWNLOAD_BATCH_BYTES: ${GDC_DOWNLOAD_BATCH_BYTES:-1000000000}
+      GDC_HTTP_TIMEOUT: ${GDC_HTTP_TIMEOUT:-120}
+      GDC_HTTP_RETRIES: ${GDC_HTTP_RETRIES:-5}
+      GDC_HTTP_BACKOFF: ${GDC_HTTP_BACKOFF:-2}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["tcga", "--help"]
+    restart: "no"
+    networks: [tcga]
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    image: tcga-medallion-web:1.0.0
+    container_name: tcga-web
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      DUCKDB_MEMORY_LIMIT: ${DUCKDB_MEMORY_LIMIT_WEB:-1GB}
+      DUCKDB_THREADS: ${DUCKDB_THREADS:-2}
+    volumes:
+      - ./data:/data:ro
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    networks: [tcga]
+
+  scheduler:
+    image: tcga-medallion-etl:1.0.0
+    build:
+      context: .
+      dockerfile: etl/Dockerfile
+    container_name: tcga-scheduler
+    profiles: ["scheduler"]
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      SQL_DIR: /sql
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS:-604800}
+    volumes:
+      - ./data:/data
+    command: ["/opt/scheduler.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [tcga]
+
+  adminer:
+    image: adminer:4.8.1
+    container_name: tcga-adminer
+    profiles: ["tools"]
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [tcga]
+
+networks:
+  tcga:
+    driver: bridge
+
+volumes:
+  pgdata:

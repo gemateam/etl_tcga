@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+data
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+**/.duckdb_tmp
+*.duckdb
+*.duckdb.wal
+.vscode
+.idea

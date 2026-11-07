@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %}Reportes · TCGA Medallion{% endblock %}
+{% block head %}<script src="/static/vendor/plotly.min.js"></script>{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Reportes</h1>
+  <p class="muted">Los cuatro reportes obligatorios del proyecto, calculados sobre las tablas gold.</p>
+</section>
+
+<div class="report-meta card">
+  <span><strong>Versión de datos GDC:</strong> {{ release.data_release if release else 'Sin dato' }}</span>
+  <span><strong>Última ejecución:</strong> {{ last_run.strftime('%Y-%m-%d %H:%M UTC') if last_run else 'Sin ejecuciones' }}</span>
+  {% if project %}<span><strong>Proyecto:</strong> {{ project }}</span>{% endif %}
+</div>
+
+{% if not top and not sample_types and not pivot %}
+  <div class="empty">
+    <h2>Todavía no hay datos gold</h2>
+    <p>Ejecuta <code>make run-brca</code> o <code>make smoke</code> para poblar los reportes.</p>
+  </div>
+{% else %}
+
+<div class="grid cards-2">
+  <section class="card">
+    <div class="row-between">
+      <h2>R1 · Diagnósticos principales</h2>
+      <a class="btn ghost small" href="/reportes/export/r1.csv?project={{ project or '' }}">CSV</a>
+    </div>
+    <div id="r1" class="chart"></div>
+    <p class="muted">Top 20 de diagnósticos primarios y porcentaje sobre el total de casos.</p>
+  </section>
+
+  <section class="card">
+    <div class="row-between">
+      <h2>R3 · Muestras</h2>
+      <a class="btn ghost small" href="/reportes/export/r3.csv?project={{ project or '' }}">CSV</a>
+    </div>
+    <div class="grid cards-2 inner">
+      <div id="r3" class="chart"></div>
+      <div id="r3-group" class="chart"></div>
+    </div>
+    <p class="muted">Muestras por tipo y proporción de tumor frente a tejido normal.</p>
+  </section>
+</div>
+
+<section class="card">
+  <div class="row-between">
+    <h2>R2 · Perfil demográfico</h2>
+    <a class="btn ghost small" href="/reportes/export/r2.csv?project={{ project or '' }}">CSV</a>
+  </div>
+  <div class="grid cards-4 inner">
+    <div id="r2-sexo" class="chart small-chart"></div>
+    <div id="r2-raza" class="chart small-chart"></div>
+    <div id="r2-etnicidad" class="chart small-chart"></div>
+    <div id="r2-vital" class="chart small-chart"></div>
+  </div>
+  <p class="muted">Distribución de casos por sexo, raza, etnicidad y estado vital.</p>
+</section>
+
+<section class="card">
+  <div class="row-between">
+    <h2>R4 · Genes más variables</h2>
+    <a class="btn ghost small" href="/reportes/export/r4.csv?project={{ project or '' }}">CSV</a>
+  </div>
+  {% if pivot %}
+    <div class="grid cards-2 inner">
+      <div>
+        <h3>Mapa de calor</h3>
+        <div id="r4-heat" class="chart tall"></div>
+      </div>
+      <div>
+        <h3>Proyección PCA</h3>
+        <div id="r4-pca" class="chart tall"></div>
+      </div>
+    </div>
+    <p class="muted">
+      {{ pivot.sample_count | fmt }} muestras y {{ pivot.gene_count | fmt }} genes en la matriz.
+      El mapa muestra hasta 120 muestras y 60 genes; la PCA usa todos los genes seleccionados.
+    </p>
+  {% else %}
+    <p class="muted">Ejecuta G02 (<code>gold-cx-pivot</code>) para generar la matriz de varianza.</p>
+  {% endif %}
+</section>
+
+{% if km %}
+<section class="card">
+  <h2>Extra · Supervivencia Kaplan-Meier por estadio</h2>
+  <div id="km" class="chart"></div>
+  <p class="muted">Estimación no ajustada con los días a la muerte o al último seguimiento disponibles.</p>
+</section>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const layoutBase = {
+  margin: {t: 12, r: 12, b: 54, l: 54},
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  plot_bgcolor: 'rgba(0,0,0,0)',
+  font: {color: '#1e293b'},
+  showlegend: false
+};
+const config = {responsive: true, displaylogo: false};
+
+function empty(id, message) {
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = '<p class="muted">' + (message || 'Sin datos.') + '</p>';
+}
+
+{% if top_json %}
+const topData = {{ top_json | safe }};
+if (topData.length) {
+  Plotly.newPlot('r1', [{
+    type: 'bar',
+    orientation: 'h',
+    y: topData.map(r => r.diagnosis).reverse(),
+    x: topData.map(r => r.cases).reverse(),
+    text: topData.map(r => r.pct.toFixed(1) + '%').reverse(),
+    textposition: 'auto',
+    marker: {color: '#0f766e'}
+  }], Object.assign({}, layoutBase, {
+    margin: {t: 10, r: 24, b: 40, l: 210},
+    xaxis: {title: 'Casos'},
+    yaxis: {automargin: true}
+  }), config);
+} else empty('r1');
+{% else %}empty('r1');{% endif %}
+
+{% if demo_json %}
+const demo = {{ demo_json | safe }};
+const demoTitles = {sexo: 'Sexo', raza: 'Raza', etnicidad: 'Etnicidad', vital: 'Estado vital'};
+const demoColors = {sexo: '#2563eb', raza: '#7c3aed', etnicidad: '#0891b2', vital: '#db2777'};
+for (const [key, rows] of Object.entries(demo)) {
+  const id = 'r2-' + key;
+  if (!rows.length) { empty(id); continue; }
+  Plotly.newPlot(id, [{
+    type: 'bar',
+    x: rows.map(r => r.label),
+    y: rows.map(r => r.n),
+    text: rows.map(r => r.n),
+    textposition: 'auto',
+    marker: {color: demoColors[key] || '#0f766e'}
+  }], Object.assign({}, layoutBase, {
+    margin: {t: 28, r: 8, b: 70, l: 42},
+    title: {text: demoTitles[key] || key, font: {size: 13}},
+    yaxis: {title: 'Casos'}
+  }), config);
+}
+{% endif %}
+
+{% if sample_json %}
+const samples = {{ sample_json | safe }};
+if (samples.length) {
+  Plotly.newPlot('r3', [{
+    type: 'bar',
+    x: samples.map(r => r.sample_type),
+    y: samples.map(r => r.samples),
+    text: samples.map(r => r.cases + ' casos'),
+    textposition: 'auto',
+    marker: {color: '#0369a1'}
+  }], Object.assign({}, layoutBase, {
+    margin: {t: 10, r: 10, b: 100, l: 46},
+    xaxis: {tickangle: -35},
+    yaxis: {title: 'Muestras'}
+  }), config);
+} else empty('r3');
+
+const groups = {{ sample_group_json | safe }};
+if (groups.length) {
+  Plotly.newPlot('r3-group', [{
+    type: 'pie',
+    labels: groups.map(r => r.label),
+    values: groups.map(r => r.samples),
+    hole: 0.45,
+    marker: {colors: ['#dc2626', '#16a34a', '#94a3b8']},
+    textinfo: 'label+percent'
+  }], Object.assign({}, layoutBase, {margin: {t: 10, r: 10, b: 10, l: 10}}), config);
+} else empty('r3-group');
+{% endif %}
+
+{% if pivot %}
+const pivot = {{ pivot.json | safe }};
+if (pivot.heatmap && pivot.heatmap.z.length) {
+  Plotly.newPlot('r4-heat', [{
+    type: 'heatmap',
+    z: pivot.heatmap.z,
+    x: pivot.heatmap.x,
+    y: pivot.heatmap.y,
+    colorscale: 'Viridis',
+    colorbar: {title: 'log1p(FPKM)'}
+  }], Object.assign({}, layoutBase, {
+    margin: {t: 10, r: 10, b: 110, l: 80},
+    xaxis: {tickangle: -45, showticklabels: false},
+    yaxis: {showticklabels: false}
+  }), config);
+} else empty('r4-heat');
+
+if (pivot.pca && pivot.pca.length) {
+  const groups = {};
+  for (const item of pivot.pca) {
+    (groups[item.sample_type] ||= []).push(item);
+  }
+  const colors = ['#dc2626', '#2563eb', '#16a34a', '#9333ea', '#d97706', '#0891b2'];
+  const traces = Object.entries(groups).map(([name, items], i) => ({
+    type: 'scatter',
+    mode: 'markers',
+    name: name,
+    x: items.map(r => r.x),
+    y: items.map(r => r.y),
+    text: items.map(r => r.sample_id),
+    marker: {size: 7, opacity: 0.8, color: colors[i % colors.length]}
+  }));
+  Plotly.newPlot('r4-pca', traces, Object.assign({}, layoutBase, {
+    showlegend: true,
+    legend: {orientation: 'h', y: 1.08},
+    xaxis: {title: 'PC1'},
+    yaxis: {title: 'PC2'}
+  }), config);
+} else empty('r4-pca');
+{% endif %}
+
+{% if km %}
+const kmTraces = {{ km.json | safe }};
+if (kmTraces.length) {
+  Plotly.newPlot('km', kmTraces.map(t => Object.assign({}, t, {line: {shape: 'hv'}})),
+    Object.assign({}, layoutBase, {
+      showlegend: true,
+      legend: {orientation: 'h', y: 1.08},
+      xaxis: {title: 'Días'},
+      yaxis: {title: 'Supervivencia', range: [0, 1.02]}
+    }), config);
+} else empty('km');
+{% endif %}
+</script>
+{% endblock %}

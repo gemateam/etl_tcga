@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Casos · TCGA Medallion{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Casos</h1>
+  <p class="muted">Filtra la cohorte y abre la ficha de cada caso.</p>
+</section>
+
+<form class="card filters" method="get" action="/casos"
+      hx-get="/casos/tabla" hx-target="#cases-table" hx-swap="outerHTML" hx-trigger="change, submit">
+  <div class="filter-grid">
+    <label>Sexo
+      <select name="sexo">
+        <option value="">Todos</option>
+        {% for v in options.sexo %}<option value="{{ v }}" {{ 'selected' if filters.sexo == v else '' }}>{{ v }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Raza
+      <select name="raza">
+        <option value="">Todas</option>
+        {% for v in options.raza %}<option value="{{ v }}" {{ 'selected' if filters.raza == v else '' }}>{{ v }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>
+      Etnicidad
+      <span class="filter-hint" title="Hispana/Latina aparece aquí según el estándar NIH, no en Raza">ⓘ</span>
+      <select name="etnicidad">
+        <option value="">Todas</option>
+        {% for v in options.etnicidad %}<option value="{{ v }}" {{ 'selected' if filters.etnicidad == v else '' }}>{{ v }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Estado vital
+      <select name="vital">
+        <option value="">Todos</option>
+        {% for v in options.vital %}<option value="{{ v }}" {{ 'selected' if filters.vital == v else '' }}>{{ v }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Diagnóstico primario
+      <select name="diagnostico">
+        <option value="">Todos</option>
+        {% for v in options.diagnostico %}<option value="{{ v }}" {{ 'selected' if filters.diagnostico == v else '' }}>{{ v }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Estadio
+      <select name="estadio">
+        <option value="">Todos</option>
+        {% for v in options.estadio %}<option value="{{ v }}" {{ 'selected' if filters.estadio == v else '' }}>{{ v }}</option>{% endfor %}
+      </select>
+    </label>
+    <input type="hidden" name="project" value="{{ project or '' }}">
+  </div>
+  <div class="actions">
+    <button type="submit" class="btn">Filtrar</button>
+    <a class="btn ghost" href="/casos{% if project %}?project={{ project }}{% endif %}">Limpiar</a>
+    <a class="btn ghost" href="/casos/export.csv?{{ filters.base_qs }}">Exportar CSV</a>
+  </div>
+</form>
+
+{% include "partials/cases_table.html" %}
+{% endblock %}

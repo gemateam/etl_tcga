@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TCGA Medallion{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/vendor/htmx.min.js" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">T</span>
+    <div>
+      <strong>TCGA Medallion</strong>
+      <small>Datos abiertos del GDC · cáncer de mama</small>
+    </div>
+  </div>
+  <nav>
+    <a href="/" class="{{ 'active' if active == 'status' else '' }}">Estado</a>
+    <a href="/casos" class="{{ 'active' if active == 'cases' else '' }}">Casos</a>
+    <a href="/genes" class="{{ 'active' if active == 'genes' else '' }}">Expresión de un gen</a>
+    <a href="/reportes" class="{{ 'active' if active == 'reports' else '' }}">Reportes</a>
+  </nav>
+</header>
+
+<main>
+  {% if projects and projects|length > 1 %}
+  <div class="project-bar">
+    <span>Proyecto:</span>
+    {% for p in projects %}
+      <a class="chip {{ 'chip-on' if (project is defined and project == p) else '' }}"
+         href="?project={{ p }}">{{ p }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer>
+  Datos: <a href="https://portal.gdc.cancer.gov/" target="_blank" rel="noopener">Genomic Data Commons</a>
+  · <a href="https://www.cancer.gov/tcga" target="_blank" rel="noopener">The Cancer Genome Atlas</a>.
+  Solo datos de acceso abierto. No se intenta reidentificar a ningún paciente.
+</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

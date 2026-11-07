@@ -1,0 +1,13 @@
+# Normaliza todos los archivos de texto a LF en el repositorio
+* text=auto eol=lf
+
+# Fuerza LF explícito en scripts de shell (crítico para Docker)
+*.sh        text eol=lf
+Makefile    text eol=lf
+Dockerfile  text eol=lf
+
+# Archivos binarios
+*.parquet   binary
+*.gz        binary
+*.tar       binary
+uv.lock     text eol=lf

@@ -1,0 +1,44 @@
+<div class="card" id="cases-table">
+  <div class="row-between">
+    <h2>{{ total | fmt }} casos</h2>
+    <span class="muted">Página {{ page }} de {{ pages }}</span>
+  </div>
+  {% if rows %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Caso</th><th>Proyecto</th><th>Sexo</th><th>Raza</th>
+        <th>Estado vital</th><th class="num">Edad</th><th>Diagnóstico</th><th>Estadio</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><a href="/casos/{{ r.case_id }}">{{ r.submitter_id or r.case_id }}</a></td>
+        <td>{{ r.project_id }}</td>
+        <td>{{ r.sex_at_birth or '—' }}</td>
+        <td>{{ r.race or '—' }}</td>
+        <td>{{ r.vital_status or '—' }}</td>
+        <td class="num">{{ r.age_at_index if r.age_at_index is not none else '—' }}</td>
+        <td>{{ r.primary_diagnosis or '—' }}</td>
+        <td>{{ r.ajcc_pathologic_stage or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="pager">
+    {% if page > 1 %}
+      <a class="btn ghost" href="/casos?{{ filters.base_qs }}&page={{ page - 1 }}"
+         hx-get="/casos/tabla?{{ filters.base_qs }}&page={{ page - 1 }}"
+         hx-target="#cases-table" hx-swap="outerHTML">← Anterior</a>
+    {% endif %}
+    {% if page < pages %}
+      <a class="btn ghost" href="/casos?{{ filters.base_qs }}&page={{ page + 1 }}"
+         hx-get="/casos/tabla?{{ filters.base_qs }}&page={{ page + 1 }}"
+         hx-target="#cases-table" hx-swap="outerHTML">Siguiente →</a>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="muted">No hay casos que cumplan los filtros. Si el pipeline aún no se ejecutó, ve a <a href="/">Estado</a>.</p>
+  {% endif %}
+</div>

@@ -1,0 +1,33 @@
+# Secretos — nunca versionar
+.env
+*.env
+
+# Datos descargados — demasiado grandes para git
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.ruff_cache/
+
+# DuckDB temporales
+*.duckdb
+*.duckdb.wal
+.duckdb_tmp/
+
+# Node / front-end
+node_modules/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

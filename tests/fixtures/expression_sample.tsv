@@ -1,0 +1,9 @@
+# gene-model: GENCODE v36
+gene_id	gene_name	gene_type	unstranded	stranded_first	stranded_second	tpm_unstranded	fpkm_unstranded	fpkm_uq_unstranded
+N_unmapped			2976444	2976444	2976444			
+N_multimapping			4105418	4105418	4105418			
+N_noFeature			1954586	28629612	29044609			
+N_ambiguous			5750570	1468817	1446495			
+ENSG00000000003.15	TSPAN6	protein_coding	3928	2013	1915	59.4987	17.2434	16.5964
+ENSG00000000005.6	TNMD	protein_coding	7	2	5	0.3259	0.0944	0.0909
+ENSG00000000419.13	DPM1	protein_coding	2504	1325	1179	142.5398	41.3097	39.7597

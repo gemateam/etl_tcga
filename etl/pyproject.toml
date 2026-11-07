@@ -1,0 +1,45 @@
+[project]
+name = "tcga-medallion-etl"
+version = "1.0.0"
+description = "Pipeline medallion para datos abiertos del TCGA (GDC)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "duckdb==1.4.1",
+    "pyarrow==21.0.0",
+    "psycopg[binary]==3.2.10",
+    "pytz==2025.2",
+    "requests==2.32.5",
+    "typer==0.19.2",
+]
+
+[project.scripts]
+tcga = "tcga.cli:app"
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.4.2",
+    "ruff>=0.8,<1",
+]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tcga"]
+
+[tool.pytest.ini_options]
+testpaths = ["../tests"]
+pythonpath = ["src"]
+markers = [
+    "integration: requiere PostgreSQL y datos de ejemplo",
+    "smoke: consulta el GDC real",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E9", "F"]

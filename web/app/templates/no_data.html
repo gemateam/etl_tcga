@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ title or 'Sin datos' }} · TCGA Medallion{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>{{ title or 'Sin datos' }}</h1>
+</section>
+<div class="empty">
+  <h2>No hay información para mostrar</h2>
+  <p>{{ message or 'Ejecuta el pipeline para poblar las capas de datos.' }}</p>
+  <p>
+    <a class="btn" href="/">Ver estado del pipeline</a>
+    <a class="btn ghost" href="/casos">Ir a casos</a>
+  </p>
+</div>
+{% endblock %}

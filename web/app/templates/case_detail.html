@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}{{ case.submitter_id or case.case_id }} · TCGA Medallion{% endblock %}
+{% block content %}
+<section class="page-head">
+  <a class="back" href="/casos{% if project %}?project={{ project }}{% endif %}">← Volver a casos</a>
+  <h1>{{ case.submitter_id or case.case_id }}</h1>
+  <p class="muted">{{ case.project_name }} · {{ case.project_id }} · <code>{{ case.case_id }}</code></p>
+  <div class="page-head-actions">
+    <a class="btn ghost small" href="/casos/{{ case.case_id }}/pdf" target="_blank"
+       title="Abre una vista de impresión con todos los datos expandidos">
+      🖨 Exportar PDF
+    </a>
+  </div>
+</section>
+
+<div class="grid cards-2">
+  <section class="card">
+    <h2>Demografía</h2>
+    <dl class="kv">
+      <dt>Sexo</dt><dd>{{ case.sex_at_birth or '—' }}</dd>
+      <dt>Raza</dt><dd>{{ case.race or '—' }}</dd>
+      <dt>Etnicidad</dt><dd>{{ case.ethnicity or '—' }}</dd>
+      <dt>Estado vital</dt><dd>{{ case.vital_status or '—' }}</dd>
+      <dt>Edad al índice</dt><dd>{{ case.age_at_index if case.age_at_index is not none else '—' }}</dd>
+      <dt>Días a la muerte</dt><dd>{{ case.days_to_death if case.days_to_death is not none else '—' }}</dd>
+      <dt>Causa de muerte</dt><dd>{{ case.cause_of_death or '—' }}</dd>
+      <dt>Estado marital</dt><dd>{{ case.marital_status or '—' }}</dd>
+    </dl>
+  </section>
+  <section class="card">
+    <h2>Caso</h2>
+    <dl class="kv">
+      <dt>Sitio primario</dt><dd>{{ case.primary_site or '—' }}</dd>
+      <dt>Tipo de enfermedad</dt><dd>{{ case.disease_type or '—' }}</dd>
+      <dt>Consentimiento</dt><dd>{{ case.consent_type or '—' }}</dd>
+      <dt>Versión GDC</dt><dd>{{ case._gdc_data_release or '—' }}</dd>
+      <dt>Diagnósticos</dt><dd>{{ diagnoses|length }}</dd>
+      <dt>Exposiciones</dt><dd>{{ exposures|length }}</dd>
+      <dt>Muestras</dt><dd>{{ samples|length }}</dd>
+      <dt>Archivos</dt><dd>{{ files|length }}</dd>
+    </dl>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Diagnósticos</h2>
+  {% if diagnoses|length > 1 %}
+  <div class="dx-multi-note">
+    ℹ️ Este caso tiene <strong>{{ diagnoses|length }} diagnósticos registrados</strong>.
+    Los archivos de expresión génica corresponden al tumor de
+    <strong>{{ case.primary_site or 'mama' }}</strong>.
+    Los diagnósticos de otros tejidos son tumores sincrónicos, previos o metástasis.
+  </div>
+  {% endif %}
+  {% if diagnoses %}
+  <table class="table">
+    <thead><tr>
+      <th>Diagnóstico</th><th>Estadio</th><th>Morfología</th>
+      <th>Lateralidad</th><th>Edad al diagnóstico</th><th>Tratamientos</th>
+    </tr></thead>
+    <tbody>
+    {% for d in diagnoses %}
+      {% set is_breast = d.tissue_or_organ_of_origin and 'breast' in d.tissue_or_organ_of_origin.lower() %}
+      {% set is_non_breast_secondary = d.tissue_or_organ_of_origin and 'breast' not in d.tissue_or_organ_of_origin.lower()
+         and d.classification_of_tumor in ('metastasis','recurrence','Prior primary','Subsequent Primary','Synchronous primary') %}
+      <tr class="{{ 'dx-row-primary' if is_breast else ('dx-row-secondary' if is_non_breast_secondary else '') }}">
+        <td>
+          {{ d.primary_diagnosis or '—' }}
+          <div class="muted small">{{ d.tissue_or_organ_of_origin or '' }}</div>
+          {% if is_breast %}
+            <span class="dx-badge dx-badge-primary" title="Diagnóstico de tejido mamario — corresponde a los archivos de expresión">🎯 Mama</span>
+          {% elif d.classification_of_tumor %}
+            <span class="dx-badge dx-badge-secondary" title="{{ d.classification_of_tumor }}">{{ d.classification_of_tumor }}</span>
+          {% endif %}
+        </td>
+        <td>{{ d.ajcc_pathologic_stage or '—' }}</td>
+        <td>{{ d.morphology or '—' }}
+          {% if d.morphology and '/' in d.morphology %}
+          {% set parts = d.morphology.split('/') %}
+          <div class="muted tiny" title="ICD-O-3: código histológico / comportamiento">
+            {% set beh = parts[-1] | int(-1) %}
+            {% if beh == 0 %}benigno
+            {% elif beh == 1 %}incierto
+            {% elif beh == 2 %}in situ
+            {% elif beh == 3 %}maligno primario
+            {% elif beh == 6 %}metastásico
+            {% elif beh == 9 %}maligno (sin especificar)
+            {% else %}ICD-O-3{% endif %}
+          </div>
+          {% endif %}
+        </td>
+        <td>{{ d.laterality or '—' }}</td>
+        <td class="num">{{ d.age_at_diagnosis | days_to_years }}</td>
+        <td>
+          {% if d.treatments %}
+            <ul class="tight">
+            {% for t in d.treatments %}
+              <li>{{ t.get('therapeutic_agents') or t.get('treatment_type') or 'Sin agente' }}
+                {% if t.get('treatment_or_therapy') %}<span class="muted">({{ t.get('treatment_or_therapy') }})</span>{% endif %}
+              </li>
+            {% endfor %}
+            </ul>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">Sin diagnósticos registrados.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Exposiciones</h2>
+  {% if exposures %}
+  <table class="table">
+    <thead><tr><th>Alcohol</th><th>Intensidad</th><th>Cigarrillos/día</th><th>Paquetes-año</th><th>Tabaquismo</th></tr></thead>
+    <tbody>
+    {% for e in exposures %}
+      <tr>
+        <td>{{ e.alcohol_history or '—' }}</td>
+        <td>{{ e.alcohol_intensity or '—' }}</td>
+        <td class="num">{{ e.cigarettes_per_day | fmt }}</td>
+        <td class="num">{{ e.pack_years_smoked | fmt }}</td>
+        <td>{{ e.tobacco_smoking_status or '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">Sin exposiciones registradas.</p>{% endif %}
+</section>
+
+<div class="grid cards-2">
+  <section class="card">
+    <h2>Muestras</h2>
+    {% if samples %}
+    <table class="table compact">
+      <thead><tr><th>Muestra</th><th>Tipo</th><th>Tejido</th></tr></thead>
+      <tbody>
+      {% for s in samples %}
+        <tr><td>{{ s.submitter_id or s.sample_id }}</td><td>{{ s.sample_type or '—' }}</td><td>{{ s.tissue_type or '—' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">Sin muestras.</p>{% endif %}
+  </section>
+  <section class="card">
+    <h2>Archivos</h2>
+    {% if files %}
+    <table class="table compact">
+      <thead><tr><th>Archivo</th><th>Tipo</th><th class="num">Tamaño</th><th></th></tr></thead>
+      <tbody>
+      {% for f in files %}
+        <tr>
+          <td class="mono small">{{ f.file_name }}</td>
+          <td>{{ f.data_type }}</td>
+          <td class="num">{{ ((f.file_size or 0) / 1048576) | round(1) }} MB</td>
+          <td>
+            {% if f.data_type == 'Gene Expression Quantification' %}
+            <button class="btn ghost small"
+              hx-get="/casos/{{ case.case_id }}/expresion/tabla?file_id={{ f.file_id }}"
+              hx-target="#expr-table-panel"
+              hx-swap="innerHTML"
+              hx-indicator="#expr-spinner"
+              onclick="document.getElementById('expr-table-panel').scrollIntoView({behavior:'smooth'})">
+              Ver genes ↓
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">Sin archivos asociados.</p>{% endif %}
+  </section>
+</div>
+
+{# ---------------------------------------------------------------- expresión génica #}
+<section class="card" id="expr-section">
+  <h2>Expresión génica
+    <span id="expr-spinner" class="htmx-indicator muted small"> cargando…</span>
+  </h2>
+
+  {# -- Panel de marcadores clínicos -- #}
+  <div id="markers-panel"
+       hx-get="/casos/{{ case.case_id }}/expresion/marcadores"
+       hx-trigger="load"
+       hx-swap="innerHTML">
+    <p class="muted small">Cargando marcadores clínicos…</p>
+  </div>
+
+  {# -- Mini tabla interactiva (se carga al pulsar "Ver genes") -- #}
+  <div id="expr-table-panel" class="mt-2"></div>
+</section>
+{% endblock %}

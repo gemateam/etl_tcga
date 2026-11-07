@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Estado · TCGA Medallion{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Estado del pipeline</h1>
+  <p class="muted">Versión de datos, avance de descargas y últimas ejecuciones.</p>
+</section>
+
+{% if not release and not runs %}
+  <div class="empty">
+    <h2>La base de datos todavía está vacía</h2>
+    <p>Ejecuta el pipeline para poblar las capas:</p>
+    <pre>docker compose run --rm etl tcga run --project TCGA-BRCA</pre>
+    <p>Para una prueba rápida: <code>make smoke</code>.</p>
+  </div>
+{% else %}
+
+<div class="grid cards-4">
+  <div class="card">
+    <span class="label">Versión de datos GDC</span>
+    <strong class="big">{{ release.data_release if release else 'Sin dato' }}</strong>
+    <small class="muted">{{ release.checked_at if release else '' }}</small>
+  </div>
+  <div class="card">
+    <span class="label">Casos</span>
+    <strong class="big">{{ counts['Casos'] | fmt }}</strong>
+    <small class="muted">{{ counts['Diagnósticos'] | fmt }} diagnósticos</small>
+  </div>
+  <div class="card">
+    <span class="label">Muestras</span>
+    <strong class="big">{{ counts['Muestras'] | fmt }}</strong>
+    <small class="muted">{{ counts['Archivos de expresión'] | fmt }} archivos completos</small>
+  </div>
+  <div class="card">
+    <span class="label">Expresión</span>
+    <strong class="big">{{ exp_stats.rows | fmt }}</strong>
+    <small class="muted">{{ exp_stats.files | fmt }} archivos · {{ counts['Genes con estadísticas'] | fmt }} genes</small>
+  </div>
+</div>
+
+<section class="card">
+  <div class="row-between">
+    <h2>Avance de descargas</h2>
+    <span class="muted">{{ totals.get('complete', 0) }} de {{ total_downloads }} archivos</span>
+  </div>
+  <div class="progress"><span style="width: {{ progress }}%"></span></div>
+  <div class="legend">
+    <span class="dot ok"></span> Completos: {{ totals.get('complete', 0) }}
+    <span class="dot warn"></span> Pendientes: {{ totals.get('pending', 0) }}
+    <span class="dot bad"></span> Fallidos: {{ totals.get('failed', 0) }}
+    <span class="muted">· {{ progress }}%</span>
+  </div>
+  {% if downloads %}
+  <table class="table compact">
+    <thead><tr><th>Proyecto</th><th>Estado</th><th class="num">Archivos</th></tr></thead>
+    <tbody>
+      {% for d in downloads %}
+      <tr><td>{{ d.project_id }}</td><td><span class="badge {{ d.status }}">{{ d.status }}</span></td><td class="num">{{ d.n | fmt }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Última ejecución por paso</h2>
+  {% if runs %}
+  <table class="table">
+    <thead>
+      <tr><th>Paso</th><th>Proyecto</th><th>Estado</th><th class="num">Salida</th><th>Inicio</th><th>Fin</th></tr>
+    </thead>
+    <tbody>
+      {% for r in runs %}
+      <tr>
+        <td><code>{{ r.step }}</code>{% if r.error %}<div class="error">{{ r.error[:240] }}</div>{% endif %}</td>
+        <td>{{ r.project_id or '—' }}</td>
+        <td><span class="badge {{ r.status }}">{{ r.status }}</span></td>
+        <td class="num">{{ r.rows_out | fmt }}</td>
+        <td class="muted">{{ r.started_at.strftime('%Y-%m-%d %H:%M') if r.started_at else '' }}</td>
+        <td class="muted">{{ r.finished_at.strftime('%Y-%m-%d %H:%M') if r.finished_at else '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Sin ejecuciones registradas.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Advertencias de calidad de datos</h2>
+  {% if qc %}
+  <table class="table compact">
+    <thead><tr><th>Paso</th><th>Chequeo</th><th>Severidad</th><th>Detalle</th></tr></thead>
+    <tbody>
+      {% for q in qc %}
+      <tr>
+        <td><code>{{ q.check_name }}</code></td>
+        <td>{{ q.severity }}</td>
+        <td><span class="badge failed">falló</span></td>
+        <td class="muted">{{ q.details }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Sin fallos de calidad registrados.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

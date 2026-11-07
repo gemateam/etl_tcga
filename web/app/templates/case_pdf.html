@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ case.submitter_id or case.case_id }} · TCGA Medallion</title>
+  <style>
+    /* ============================================================
+       ESTILOS GENERALES (vista en navegador antes de imprimir)
+       ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #1e293b;
+      background: #f8fafc;
+      padding: 20px;
+    }
+
+    /* Barra de acción (oculta al imprimir) */
+    .print-toolbar {
+      position: sticky; top: 0; z-index: 100;
+      background: #1e3a5f; color: #fff;
+      padding: 10px 20px;
+      display: flex; align-items: center; gap: 12px;
+      border-radius: 8px; margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }
+    .print-toolbar h2 { flex: 1; font-size: 14px; font-weight: 600; }
+    .btn-print {
+      background: #10b981; color: #fff; border: none;
+      padding: 8px 18px; border-radius: 6px; font-size: 13px;
+      font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    }
+    .btn-print:hover { background: #059669; }
+    .btn-close {
+      color: #94a3b8; text-decoration: none; font-size: 13px;
+      padding: 6px 10px; border-radius: 4px;
+    }
+    .btn-close:hover { background: rgba(255,255,255,.1); color: #fff; }
+
+    /* Contenedor del documento */
+    .pdf-document {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 20px rgba(0,0,0,.08);
+      overflow: hidden;
+    }
+
+    /* Encabezado del documento */
+    .doc-header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #0f766e 100%);
+      color: #fff;
+      padding: 24px 28px 20px;
+    }
+    .doc-header .doc-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .doc-header .doc-meta  { font-size: 12px; opacity: .8; }
+    .doc-header .doc-id    { font-family: monospace; font-size: 11px;
+                              background: rgba(255,255,255,.15); padding: 2px 8px;
+                              border-radius: 4px; display: inline-block; margin-top: 4px; }
+    .doc-header .doc-date  { font-size: 11px; opacity: .65; margin-top: 6px; }
+
+    /* Secciones */
+    .pdf-body { padding: 0 28px 28px; }
+
+    .section { margin-top: 20px; }
+    .section-title {
+      font-size: 13px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; color: #64748b;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 6px; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title::before {
+      content: ''; display: inline-block;
+      width: 4px; height: 16px; border-radius: 2px;
+      background: #0f766e;
+    }
+
+    /* Cuadrícula 2 columnas */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* Card */
+    .card {
+      border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 14px 16px; background: #f8fafc;
+    }
+    .card-title { font-size: 12px; font-weight: 700; color: #475569;
+                  margin-bottom: 10px; text-transform: uppercase; letter-spacing: .04em; }
+
+    /* Tabla clave-valor */
+    dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
+    dl.kv dt { font-weight: 600; color: #64748b; font-size: 11px;
+               white-space: nowrap; padding: 2px 0; }
+    dl.kv dd { color: #1e293b; font-size: 12px; padding: 2px 0; }
+
+    /* Tablas */
+    table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    th {
+      background: #f1f5f9; color: #475569;
+      font-weight: 600; font-size: 10.5px; text-transform: uppercase;
+      letter-spacing: .04em; padding: 7px 10px; text-align: left;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) { background: #fafafa; }
+    .num { text-align: right; }
+    .mono { font-family: monospace; font-size: 10px; }
+    .muted { color: #64748b; }
+    .tiny { font-size: 10px; }
+    .small { font-size: 11px; }
+    .tag {
+      display: inline-block; font-size: 9.5px; padding: 1px 6px;
+      border-radius: 999px; background: #e0f2fe; color: #0369a1;
+    }
+
+    /* Panel de marcadores */
+    .markers-note {
+      background: #fffbeb; border: 1px solid #fbbf24;
+      border-radius: 6px; padding: 7px 12px;
+      font-size: 11px; color: #92400e; margin-bottom: 10px;
+    }
+    .markers-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    }
+    .marker-card {
+      border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 9px 11px; background: #f8fafc;
+    }
+    .marker-card.high { border-color: #6ee7b7; background: #f0fdf4; }
+    .marker-card.low  { border-color: #fca5a5; background: #fff5f5; }
+    .marker-card.mid  { border-color: #bfdbfe; background: #eff6ff; }
+    .marker-gene { font-weight: 700; font-size: 13px; font-family: monospace; }
+    .marker-tpm  { float: right; font-size: 12px; font-weight: 600; }
+    .marker-desc { font-size: 10px; color: #64748b; margin: 3px 0 5px; line-height: 1.3; }
+    .bar-wrap {
+      height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;
+      margin-bottom: 3px;
+    }
+    .bar-fill { height: 100%; border-radius: 3px; }
+    .bar-high { background: #10b981; }
+    .bar-low  { background: #f87171; }
+    .bar-mid  { background: #60a5fa; }
+    .marker-pct { font-size: 9.5px; color: #64748b; }
+    .marker-note { font-size: 9px; color: #94a3b8; margin-top: 4px; line-height: 1.3; }
+
+    /* Top genes — barra inline */
+    .inline-bar-wrap { width: 80px; height: 7px; background: #e2e8f0;
+                       border-radius: 4px; overflow: hidden; display: inline-block; }
+    .inline-bar-fill { height: 100%; background: linear-gradient(90deg, #6ee7b7, #34d399);
+                       border-radius: 4px; }
+
+    /* Pie de página del documento */
+    .doc-footer {
+      margin-top: 28px; padding: 14px 28px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 10px; color: #94a3b8; line-height: 1.6;
+    }
+
+    /* ============================================================
+       ESTILOS DE IMPRESIÓN
+       ============================================================ */
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+      body { background: #fff; padding: 0; font-size: 11px; }
+
+      .print-toolbar { display: none !important; }
+
+      .pdf-document {
+        max-width: 100%; box-shadow: none; border-radius: 0;
+        margin: 0; padding: 0;
+      }
+
+      .doc-header { padding: 16px 20px 14px; }
+      .doc-header .doc-title { font-size: 18px; }
+      .pdf-body { padding: 0 20px 20px; }
+      .section { margin-top: 14px; }
+
+      /* Evita cortes de página dentro de cards y filas de tabla */
+      .card         { break-inside: avoid; }
+      .marker-card  { break-inside: avoid; }
+      tr            { break-inside: avoid; }
+
+      /* Salto de página antes de secciones grandes */
+      .section.page-break-before { break-before: page; }
+
+      /* Muestra URLs en enlaces */
+      a::after { content: none !important; }
+
+      /* Reduce el grid de marcadores a 4 columnas en A4 */
+      .markers-grid { grid-template-columns: repeat(4, 1fr); }
+
+      .doc-footer { margin-top: 14px; }
+    }
+
+    @page {
+      size: A4;
+      margin: 15mm 12mm 15mm 12mm;
+    }
+  </style>
+</head>
+<body>
+
+{# ---- Barra de acción (solo visible en navegador) ---- #}
+<div class="print-toolbar">
+  <h2>📄 Vista de impresión — {{ case.submitter_id or case.case_id }}</h2>
+  <button class="btn-print" onclick="window.print()">
+    🖨&nbsp; Imprimir / Guardar PDF
+  </button>
+  <a class="btn-close" href="/casos/{{ case.case_id }}">✕ Cerrar</a>
+</div>
+
+{# ---- Documento ---- #}
+<div class="pdf-document">
+
+  {# Encabezado #}
+  <div class="doc-header">
+    <div class="doc-title">{{ case.submitter_id or case.case_id }}</div>
+    <div class="doc-meta">
+      {{ case.project_name or '' }}
+      {% if case.project_id %} · {{ case.project_id }}{% endif %}
+      {% if case.primary_site %} · {{ case.primary_site }}{% endif %}
+    </div>
+    <div class="doc-id">{{ case.case_id }}</div>
+    <div class="doc-date">
+      Generado el {{ generated_at }} UTC · Datos: {{ case._gdc_data_release or 'GDC' }} ·
+      Solo uso en investigación
+    </div>
+  </div>
+
+  <div class="pdf-body">
+
+    {# ---- Demografía y datos del caso ---- #}
+    <div class="section">
+      <div class="section-title">Demografía y caso</div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Demografía</div>
+          <dl class="kv">
+            <dt>Sexo al nacer</dt>    <dd>{{ case.sex_at_birth or '—' }}</dd>
+            <dt>Raza</dt>             <dd>{{ case.race or '—' }}</dd>
+            <dt>Etnicidad</dt>        <dd>{{ case.ethnicity or '—' }}</dd>
+            <dt>Estado vital</dt>     <dd>{{ case.vital_status or '—' }}</dd>
+            <dt>Edad al índice</dt>   <dd>{{ case.age_at_index if case.age_at_index is not none else '—' }} años</dd>
+            {% if case.days_to_death is not none %}
+            <dt>Días a la muerte</dt><dd>{{ case.days_to_death }}</dd>
+            {% endif %}
+            {% if case.cause_of_death %}
+            <dt>Causa de muerte</dt> <dd>{{ case.cause_of_death }}</dd>
+            {% endif %}
+            {% if case.marital_status %}
+            <dt>Estado marital</dt>  <dd>{{ case.marital_status }}</dd>
+            {% endif %}
+            {% if case.country_of_residence_at_enrollment %}
+            <dt>País residencia</dt> <dd>{{ case.country_of_residence_at_enrollment }}</dd>
+            {% endif %}
+            {% if case.education_level %}
+            <dt>Nivel educativo</dt> <dd>{{ case.education_level }}</dd>
+            {% endif %}
+          </dl>
+        </div>
+        <div class="card">
+          <div class="card-title">Datos del caso</div>
+          <dl class="kv">
+            <dt>Sitio primario</dt>     <dd>{{ case.primary_site or '—' }}</dd>
+            <dt>Tipo de enfermedad</dt> <dd>{{ case.disease_type or '—' }}</dd>
+            <dt>Proyecto</dt>           <dd>{{ case.project_id or '—' }}</dd>
+            <dt>Consentimiento</dt>     <dd>{{ case.consent_type or '—' }}</dd>
+            <dt>Versión GDC</dt>        <dd>{{ case._gdc_data_release or '—' }}</dd>
+            <dt>Diagnósticos</dt>       <dd>{{ diagnoses|length }}</dd>
+            <dt>Muestras</dt>           <dd>{{ samples|length }}</dd>
+            <dt>Archivos expr.</dt>     <dd>{{ files|length }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    {# ---- Diagnósticos ---- #}
+    <div class="section">
+      <div class="section-title">Diagnósticos ({{ diagnoses|length }})</div>
+      {% if diagnoses %}
+      <table>
+        <thead>
+          <tr>
+            <th>Diagnóstico</th>
+            <th>Tejido / Órgano</th>
+            <th>Estadio AJCC</th>
+            <th>Morfología</th>
+            <th>Lateralidad</th>
+            <th>Edad diag.</th>
+            <th>Tratamientos</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for d in diagnoses %}
+          <tr>
+            <td>
+              <strong>{{ d.primary_diagnosis or '—' }}</strong>
+              {% if d.classification_of_tumor %}
+              <div class="tiny muted">{{ d.classification_of_tumor }}</div>
+              {% endif %}
+            </td>
+            <td class="small">{{ d.tissue_or_organ_of_origin or '—' }}</td>
+            <td>
+              {{ d.ajcc_pathologic_stage or '—' }}
+              {% if d.ajcc_clinical_stage and d.ajcc_clinical_stage != d.ajcc_pathologic_stage %}
+              <div class="tiny muted">Clínico: {{ d.ajcc_clinical_stage }}</div>
+              {% endif %}
+            </td>
+            <td>
+              {{ d.morphology or '—' }}
+              {% if d.morphology and '/' in d.morphology %}
+              {% set parts = d.morphology.split('/') %}
+              {% set beh = parts[-1] | int(-1) %}
+              <div class="tiny muted">
+                {% if beh == 0 %}benigno
+                {% elif beh == 1 %}incierto
+                {% elif beh == 2 %}in situ
+                {% elif beh == 3 %}maligno primario
+                {% elif beh == 6 %}metastásico
+                {% elif beh == 9 %}maligno s/e
+                {% else %}ICD-O-3{% endif %}
+              </div>
+              {% endif %}
+            </td>
+            <td>{{ d.laterality or '—' }}</td>
+            <td class="num">
+              {% if d.age_at_diagnosis is not none %}
+              {{ (d.age_at_diagnosis // 365) }} a
+              {% else %}—{% endif %}
+            </td>
+            <td class="small">
+              {% if d.treatments %}
+              {% for t in d.treatments %}
+              <div>{{ t.get('therapeutic_agents') or t.get('treatment_type') or 'Tto.' }}
+                {% if t.get('treatment_or_therapy') %}
+                <span class="muted tiny">({{ t.get('treatment_or_therapy') }})</span>
+                {% endif %}
+              </div>
+              {% endfor %}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="muted small">Sin diagnósticos registrados.</p>{% endif %}
+    </div>
+
+    {# ---- Exposiciones ---- #}
+    {% if exposures %}
+    <div class="section">
+      <div class="section-title">Exposiciones</div>
+      <table>
+        <thead>
+          <tr><th>Alcohol</th><th>Intensidad</th><th>Cigarrillos/día</th>
+              <th>Paquetes-año</th><th>Estado tabaquismo</th></tr>
+        </thead>
+        <tbody>
+        {% for e in exposures %}
+          <tr>
+            <td>{{ e.alcohol_history or '—' }}</td>
+            <td>{{ e.alcohol_intensity or '—' }}</td>
+            <td class="num">{{ e.cigarettes_per_day if e.cigarettes_per_day is not none else '—' }}</td>
+            <td class="num">{{ e.pack_years_smoked if e.pack_years_smoked is not none else '—' }}</td>
+            <td>{{ e.tobacco_smoking_status or '—' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {# ---- Muestras y archivos ---- #}
+    <div class="section">
+      <div class="section-title">Muestras ({{ samples|length }})</div>
+      {% if samples %}
+      <table>
+        <thead><tr><th>ID muestra</th><th>Tipo</th><th>Tejido</th><th>Descriptor tumor</th></tr></thead>
+        <tbody>
+        {% for s in samples %}
+          <tr>
+            <td class="mono">{{ s.submitter_id or s.sample_id }}</td>
+            <td>{{ s.sample_type or '—' }}</td>
+            <td>{{ s.tissue_type or '—' }}</td>
+            <td>{{ s.tumor_descriptor or '—' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="muted small">Sin muestras.</p>{% endif %}
+    </div>
+
+    {# ---- Marcadores clínicos ---- #}
+    <div class="section page-break-before">
+      <div class="section-title">Marcadores clínicos de expresión génica</div>
+      <div class="markers-note">
+        ⚠️ <strong>Datos para investigación.</strong>
+        No sustituyen la inmunohistoquímica ni el diagnóstico clínico.
+        {% if marker_sample_id %}
+        Muestra: <code>{{ marker_sample_id }}</code>
+        {% endif %}
+      </div>
+      {% if markers %}
+      <div class="markers-grid">
+        {% for m in markers %}
+        {% set level = 'high' if m.pct_rank is not none and m.pct_rank >= 75
+                       else ('low' if m.pct_rank is not none and m.pct_rank < 25 else 'mid') %}
+        <div class="marker-card {{ level }}">
+          <div>
+            <span class="marker-gene">{{ m.gene_name }}</span>
+            <span class="marker-tpm">
+              {% if m.tpm is not none %}{{ '%.1f'|format(m.tpm) }} TPM
+              {% else %}<span class="muted">Sin dato</span>{% endif %}
+            </span>
+          </div>
+          <div class="marker-desc">{{ m.description }}</div>
+          {% if m.pct_rank is not none %}
+          <div class="bar-wrap">
+            <div class="bar-fill bar-{{ level }}" style="width:{{ [m.pct_rank, 100]|min }}%"></div>
+          </div>
+          <div class="marker-pct">p{{ m.pct_rank|int }} · {{ m.category }} · {{ m.sample_type }}</div>
+          {% else %}
+          <div class="marker-pct muted">Sin percentil</div>
+          {% endif %}
+          {% if m.note %}
+          <div class="marker-note">ⓘ {{ m.note[:100] }}{% if m.note|length > 100 %}…{% endif %}</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <p class="muted tiny" style="margin-top:6px">
+        Alto (≥ p75) · Medio (p25–p75) · Bajo (&lt; p25). Percentil vs. muestras del mismo tipo en TCGA-BRCA.
+      </p>
+      {% else %}
+      <p class="muted small">Sin datos de marcadores para este caso.</p>
+      {% endif %}
+    </div>
+
+    {# ---- Top genes de expresión ---- #}
+    {% if top_genes %}
+    <div class="section page-break-before">
+      <div class="section-title">
+        Top genes por TPM — 50 genes mostrados
+        {% if expr_file_id %}
+        <span class="muted tiny" style="margin-left:8px">{{ expr_file_id }}</span>
+        {% endif %}
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Gen</th>
+            <th>Tipo</th>
+            <th class="num">TPM</th>
+            <th class="num">FPKM</th>
+            <th class="num">Counts</th>
+            <th>Expresión (TPM)</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% set max_tpm = top_genes[0].tpm_unstranded or 1 %}
+        {% for r in top_genes %}
+        {% set tpm = r.tpm_unstranded or 0 %}
+        {% set bar_pct = (tpm / max_tpm * 100) | round(1) if max_tpm > 0 else 0 %}
+          <tr>
+            <td class="muted small">{{ loop.index }}</td>
+            <td>
+              <strong class="mono">{{ r.gene_name or r.gene_id }}</strong>
+              <div class="muted tiny">{{ r.gene_id }}</div>
+            </td>
+            <td><span class="tag">{{ r.gene_type or '—' }}</span></td>
+            <td class="num">{{ '%.2f'|format(tpm) }}</td>
+            <td class="num muted">{{ '%.4f'|format(r.fpkm_unstranded or 0) }}</td>
+            <td class="num muted">{{ r.unstranded | int if r.unstranded is not none else '—' }}</td>
+            <td>
+              <div class="inline-bar-wrap">
+                <div class="inline-bar-fill" style="width:{{ bar_pct }}%"></div>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {# ---- Archivos de datos ---- #}
+    <div class="section">
+      <div class="section-title">Archivos de datos ({{ files|length }})</div>
+      {% if files %}
+      <table>
+        <thead><tr><th>Nombre de archivo</th><th>Tipo</th><th class="num">Tamaño</th></tr></thead>
+        <tbody>
+        {% for f in files %}
+          <tr>
+            <td class="mono tiny">{{ f.file_name }}</td>
+            <td class="small">{{ f.data_type or '—' }}</td>
+            <td class="num small">{{ ((f.file_size or 0) / 1048576) | round(1) }} MB</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+
+  </div>{# fin pdf-body #}
+
+  {# ---- Pie de página ---- #}
+  <div class="doc-footer">
+    <strong>TCGA Medallion</strong> · Datos del
+    <a href="https://gdc.cancer.gov">NCI Genomic Data Commons (GDC)</a> ·
+    Solo datos de acceso abierto · Para uso en investigación · No compartir datos individuales.<br>
+    Cita: The Cancer Genome Atlas Research Network.
+    <em>Comprehensive molecular portraits of human breast tumours.</em>
+    Nature 490, 61–70 (2012). doi:10.1038/nature11412 ·
+    Política de uso: <a href="https://gdc.cancer.gov/access-data/data-access-policies">gdc.cancer.gov/access-data/data-access-policies</a>
+  </div>
+
+</div>{# fin pdf-document #}
+
+<script>
+  // Dispara automáticamente el diálogo de impresión si viene con ?autoprint=1
+  if (new URLSearchParams(window.location.search).get('autoprint') === '1') {
+    window.addEventListener('load', () => setTimeout(window.print, 400));
+  }
+</script>
+</body>
+</html>

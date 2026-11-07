@@ -1,0 +1,55 @@
+{# Panel de marcadores clínicos — datos desde gold.sample_marker_values #}
+<div class="markers-research-note">
+  ⚠️ <strong>Datos para investigación.</strong>
+  No sustituyen la inmunohistoquímica ni el diagnóstico clínico.
+</div>
+
+{% if not markers %}
+  <p class="muted small">Sin datos de marcadores para este caso en la base de datos gold.</p>
+{% else %}
+<p class="muted small">
+  Expresión (<strong>TPM</strong>) y percentil frente a muestras del mismo tipo
+  en TCGA-BRCA · muestra <code>{{ sample_id }}</code>
+</p>
+<div class="markers-grid">
+  {% for m in markers %}
+  {% set pct = m.pct_rank %}
+  {% set level = 'high' if pct is not none and pct >= 75 else ('low' if pct is not none and pct < 25 else 'mid') %}
+  <div class="marker-card marker-{{ level }}">
+    <div class="marker-top">
+      <span class="marker-gene">
+        <a href="/genes?gene={{ m.gene_name }}" class="link" title="Ver en cohorte">{{ m.gene_name }}</a>
+      </span>
+      <span class="marker-tpm">
+        {% if m.tpm is not none %}
+          {{ '%.1f'|format(m.tpm) }} <span class="muted small">TPM</span>
+        {% else %}
+          <span class="muted small" title="Gen sin valor de expresión en esta muestra">Sin dato</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="marker-desc muted small">{{ m.description }}</div>
+    {% if pct is not none %}
+    <div class="marker-bar-wrap"
+         title="Percentil {{ pct }}%: esta muestra supera al {{ pct }}% del grupo {{ m.sample_type }}">
+      <div class="marker-bar marker-bar-{{ level }}" style="width: {{ [pct, 100]|min }}%"></div>
+      <span class="marker-pct muted small">
+        p{{ pct|int }} · {{ m.category }}
+      </span>
+    </div>
+    {% else %}
+    <p class="muted tiny">Sin percentil — gen no detectado en esta muestra</p>
+    {% endif %}
+    {% if m.note %}
+    <p class="muted tiny mt-1" title="{{ m.note }}">ⓘ {{ m.note[:80] }}{% if m.note|length > 80 %}…{% endif %}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+<p class="muted small mt-1">
+  <strong>Alto</strong> (≥ p75) &nbsp;·&nbsp;
+  <strong>Medio</strong> (p25–p75) &nbsp;·&nbsp;
+  <strong>Bajo</strong> (&lt; p25)
+  &nbsp;·&nbsp; Comparado contra muestras del mismo tipo en TCGA-BRCA.
+</p>
+{% endif %}

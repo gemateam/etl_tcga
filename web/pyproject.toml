@@ -1,0 +1,35 @@
+[project]
+name = "tcga-medallion-web"
+version = "1.0.0"
+description = "Página de consulta y reportes del pipeline TCGA medallion"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "duckdb==1.4.1",
+    "fastapi==0.115.12",
+    "jinja2==3.1.6",
+    "numpy==2.2.6",
+    "psycopg[binary]==3.2.10",
+    "uvicorn[standard]==0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx==0.28.1",
+    "pytest==8.4.2",
+    "ruff>=0.8,<1",
+]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E9", "F"]

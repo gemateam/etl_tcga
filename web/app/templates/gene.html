@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Expresión de un gen · TCGA Medallion{% endblock %}
+{% block head %}<script src="/static/vendor/plotly.min.js"></script>{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Expresión de un gen</h1>
+  <p class="muted">Busca por símbolo (p.ej. <code>ESR1</code>, <code>ERBB2</code>) o por <code>gene_id</code>.</p>
+</section>
+
+<form class="card filters" method="get" action="/genes">
+  <div class="filter-grid">
+    <label>Gen
+      <input type="text" name="gene" list="gene-list" value="{{ gene_q }}"
+             placeholder="ESR1" autocomplete="off" required>
+      <datalist id="gene-list"></datalist>
+    </label>
+    <label>Métrica
+      <select name="metric">
+        <option value="fpkm_unstranded" {{ 'selected' if metric == 'fpkm_unstranded' }}>FPKM</option>
+        <option value="tpm_unstranded"  {{ 'selected' if metric == 'tpm_unstranded'  }}>TPM</option>
+      </select>
+    </label>
+    <label>Escala gráficas
+      <select name="log2">
+        <option value="1" {{ 'selected' if log2 }}>log₂(x + 1)</option>
+        <option value="0" {{ 'selected' if not log2 }}>Lineal</option>
+      </select>
+    </label>
+  </div>
+  <input type="hidden" name="project" value="{{ project or '' }}">
+  <div class="actions">
+    <button class="btn" type="submit">Consultar</button>
+  </div>
+</form>
+
+{% if gene_q and not gene %}
+  <div class="empty">
+    <h2>Gen no encontrado</h2>
+    <p>Prueba con otro símbolo. Si acabas de cargar los datos, ejecuta
+       <code>tcga gold-extras</code> para poblar <code>gold.gene_dim</code>.</p>
+  </div>
+{% elif gene %}
+<section class="card">
+  <h2>{{ gene.gene_name or gene.gene_id }}</h2>
+  <p class="muted">
+    <code>{{ gene.gene_id }}</code> · {{ gene.gene_type or 'tipo desconocido' }} ·
+    {{ n_values | fmt }} muestras con valor ·
+    <span class="muted small">Métrica: <strong>{{ metric }}</strong></span>
+  </p>
+
+  {# Tabla de estadísticas con percentiles on-demand #}
+  {% if percentiles %}
+  <div class="table-scroll">
+  <table class="table compact">
+    <thead>
+      <tr>
+        <th>Tipo de muestra</th>
+        <th class="num">n</th>
+        <th class="num">n &gt; 0</th>
+        <th class="num">Mediana</th>
+        <th class="num">p25</th>
+        <th class="num">p75</th>
+        <th class="num">Media</th>
+        <th class="num">Desv. Est.</th>
+        <th class="num small muted">Unidad</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for p in percentiles %}
+      <tr>
+        <td>{{ p.sample_type }}</td>
+        <td class="num">{{ p.n_samples | fmt }}</td>
+        <td class="num">{{ p.n_expressed | fmt }}</td>
+        <td class="num">{{ p.median | fmt }}</td>
+        <td class="num muted">{{ p.p25 | fmt }}</td>
+        <td class="num muted">{{ p.p75 | fmt }}</td>
+        <td class="num">{{ p.mean | fmt }}</td>
+        <td class="num muted">{{ p.std | fmt }}</td>
+        <td class="num tiny muted">{{ metric | upper | replace('_UNSTRANDED','') }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted tiny">
+    ⓘ Mediana y percentiles calculados con approx_quantile (error ≤ 0.5%).
+    Media y desviación estándar son sensibles a valores extremos.
+    {% if not log2 %}Escala lineal — considera activar log₂ para reducir el efecto de valores extremos.{% endif %}
+  </p>
+  <div class="actions">
+    <a class="btn ghost" href="/genes/export.csv?gene={{ gene.gene_id }}&project={{ project or '' }}&metric={{ metric }}">
+      Descargar CSV
+    </a>
+  </div>
+  {% elif stats %}
+  {# Fallback a stats sin percentiles si gene_percentiles devuelve vacío #}
+  <p class="muted small">Estadísticas disponibles, percentiles aún no calculados.</p>
+  {% else %}
+  <p class="muted">Sin estadísticas. Ejecuta <code>tcga gold-extras</code>.</p>
+  {% endif %}
+</section>
+
+{# Gráficas de boxplot #}
+<div class="grid cards-2">
+  <section class="card">
+    <h2>Por tipo de muestra</h2>
+    <div id="box-type" class="chart"></div>
+  </section>
+  <section class="card">
+    <h2>Por estadio (agrupado)</h2>
+    <div id="box-stage" class="chart"></div>
+  </section>
+</div>
+
+<script>
+const boxType  = {{ box_type  | safe }};
+const boxStage = {{ box_stage | safe }};
+const nByGroup = {{ n_by_group | safe }};
+const yLabel   = {{ log2 | tojson }} ? 'log₂({{ metric }} + 1)' : '{{ metric }}';
+
+const layout = {
+  margin: {t: 30, r: 10, b: 80, l: 60},
+  paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+  font: {color: '#1e293b'},
+  yaxis: {title: yLabel},
+  showlegend: false,
+};
+
+function addNAnnotations(data, el) {
+  const annotations = data.map(trace => ({
+    x: trace.name,
+    y: 0,
+    xref: 'x', yref: 'paper',
+    text: `n=${trace.y.length}`,
+    showarrow: false,
+    yanchor: 'top', yshift: -18,
+    font: {size: 10, color: '#64748b'},
+  }));
+  Plotly.newPlot(el, data, {...layout, annotations}, {responsive: true});
+}
+
+if (boxType.length)  addNAnnotations(boxType,  'box-type');
+else document.getElementById('box-type').innerHTML  = '<p class="muted">Sin datos suficientes (mín. 5 muestras por grupo).</p>';
+
+if (boxStage.length) addNAnnotations(boxStage, 'box-stage');
+else document.getElementById('box-stage').innerHTML = '<p class="muted">Sin datos de estadio.</p>';
+</script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const geneInput = document.querySelector('input[name="gene"]');
+if (geneInput) {
+  let timer = null;
+  geneInput.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = geneInput.value.trim();
+    if (q.length < 2) return;
+    const project = document.querySelector('input[name="project"]').value;
+    timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/genes?q=${encodeURIComponent(q)}&project=${encodeURIComponent(project)}`);
+        const rows = await res.json();
+        document.getElementById('gene-list').innerHTML = rows.map(
+          g => `<option value="${g.gene_name || g.gene_id}">${g.gene_id} · ${g.gene_type || ''}</option>`
+        ).join('');
+      } catch (e) { /* autocompletado opcional */ }
+    }, 250);
+  });
+}
+</script>
+{% endblock %}
