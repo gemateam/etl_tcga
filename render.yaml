@@ -5,7 +5,7 @@
 version: "1"
 services:
   # Base de datos PostgreSQL administrada (gratis: 1GB RAM, 1GB disco)
-  - type: postgres
+  - type: postgresql
     name: tcga-postgres
     plan: free
     databaseName: tcga
