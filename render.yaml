@@ -10,7 +10,6 @@ services:
     plan: free
     runtime: docker
     dockerfilePath: ./web/Dockerfile.render
-    command: /app/start.sh
     healthCheckPath: /health
     envVars:
       - key: POSTGRES_HOST
@@ -52,7 +51,6 @@ services:
     plan: free
     runtime: docker
     dockerfilePath: ./etl/Dockerfile.render
-    command: /app/entrypoint.sh tcga --help
     envVars:
       - key: DATABASE_URL
         fromDatabase:
