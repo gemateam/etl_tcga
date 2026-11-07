@@ -8,6 +8,7 @@ services:
   - type: web
     name: tcga-web
     plan: free
+    runtime: docker
     dockerfilePath: ./web/Dockerfile.render
     startCommand: /app/start.sh
     healthCheckPath: /health
@@ -49,6 +50,7 @@ services:
   - type: worker
     name: tcga-etl
     plan: free
+    runtime: docker
     dockerfilePath: ./etl/Dockerfile.render
     startCommand: /app/entrypoint.sh tcga --help
     envVars:
