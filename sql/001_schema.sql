@@ -374,6 +374,14 @@ CREATE INDEX IF NOT EXISTS idx_smut_case    ON silver.mutations (case_id);
 CREATE INDEX IF NOT EXISTS idx_smut_gene    ON silver.mutations (hugo_symbol);
 CREATE INDEX IF NOT EXISTS idx_smut_vc      ON silver.mutations (variant_classification);
 
+-- ------------------------------------------------ migraciones idempotentes
+-- `CREATE TABLE IF NOT EXISTS` no añade columnas a tablas ya creadas. Estas
+-- sentencias alinean bases existentes con el DDL actual sin borrar datos.
+ALTER TABLE bronze.mutations
+    ADD COLUMN IF NOT EXISTS tumor_sample_barcode TEXT;
+ALTER TABLE silver.mutations
+    ADD COLUMN IF NOT EXISTS tumor_sample_barcode TEXT;
+
 -- --------------------------------------------------------------- permisos
 DO $$
 BEGIN
