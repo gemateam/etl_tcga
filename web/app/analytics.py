@@ -101,15 +101,18 @@ CLINICAL_MARKERS = [
 
 
 def expression_top_genes(
-    file_id: str, limit: int = 50, gene_type_filter: str | None = None
+    file_id: str,
+    limit: int = 50,
+    gene_type_filter: str | None = None,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
-    """Top N genes por TPM de un archivo de expresión específico."""
+    """Genes por TPM de un archivo de expresión específico, paginados."""
     if not available():
         return []
     glob = (settings.data_dir / "silver" / "case_expressions" / "**" / "*.parquet").as_posix()
     sql = """
         SELECT gene_id, gene_name, gene_type,
-               tpm_unstranded, fpkm_unstranded, unstranded
+             tpm_unstranded, fpkm_unstranded, fpkm_uq_unstranded, unstranded
         FROM read_parquet(?, union_by_name = true)
         WHERE file_id = ?
           AND NOT starts_with(gene_id, 'N_')
@@ -118,13 +121,34 @@ def expression_top_genes(
     if gene_type_filter:
         sql += " AND gene_type = ?"
         params.append(gene_type_filter)
-    sql += " ORDER BY tpm_unstranded DESC NULLS LAST LIMIT ?"
-    params.append(limit)
+    sql += " ORDER BY tpm_unstranded DESC NULLS LAST, gene_id LIMIT ? OFFSET ?"
+    params.extend([limit, max(0, offset)])
     con = _connect()
     try:
         cursor = con.execute(sql, params)
         cols = [d[0] for d in cursor.description]
         return [dict(zip(cols, row)) for row in cursor.fetchall()]
+    finally:
+        con.close()
+
+
+def expression_gene_count(file_id: str, gene_type_filter: str | None = None) -> int:
+    """Cuenta todos los genes de un archivo con el filtro opcional aplicado."""
+    if not available():
+        return 0
+    glob = (settings.data_dir / "silver" / "case_expressions" / "**" / "*.parquet").as_posix()
+    sql = """
+        SELECT count(*)
+        FROM read_parquet(?, union_by_name = true)
+        WHERE file_id = ? AND NOT starts_with(gene_id, 'N_')
+    """
+    params: list[Any] = [glob, file_id]
+    if gene_type_filter:
+        sql += " AND gene_type = ?"
+        params.append(gene_type_filter)
+    con = _connect()
+    try:
+        return int(con.execute(sql, params).fetchone()[0])
     finally:
         con.close()
 

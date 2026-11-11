@@ -7,7 +7,7 @@
   <table class="table">
     <thead>
       <tr>
-        <th>Caso</th><th>Proyecto</th><th>Sexo</th><th>Raza</th>
+        <th>Caso</th><th>Proyecto</th><th>Sexo</th><th>Raza</th><th>Etnicidad</th>
         <th>Estado vital</th><th class="num">Edad</th><th>Diagnóstico</th><th>Estadio</th>
       </tr>
     </thead>
@@ -18,6 +18,11 @@
         <td>{{ r.project_id }}</td>
         <td>{{ r.sex_at_birth or '—' }}</td>
         <td>{{ r.race or '—' }}</td>
+        <td>
+          {% if r.ethnicity and r.ethnicity|lower == 'hispanic or latino' %}
+          <span class="dx-badge dx-badge-primary" title="Caso priorizado en la cohorte hispana/latina">{{ r.ethnicity }} · prioridad</span>
+          {% else %}{{ r.ethnicity or '—' }}{% endif %}
+        </td>
         <td>{{ r.vital_status or '—' }}</td>
         <td class="num">{{ r.age_at_index if r.age_at_index is not none else '—' }}</td>
         <td>{{ r.primary_diagnosis or '—' }}</td>

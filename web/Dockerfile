@@ -34,7 +34,9 @@ RUN groupadd --gid 10001 app \
 WORKDIR /app
 
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
+COPY --chown=app:app web/pyproject.toml /app/pyproject.toml
 COPY --chown=app:app web/app /app/app
+COPY --chown=app:app tests/test_web.py /app/tests/test_web.py
 
 USER app
 

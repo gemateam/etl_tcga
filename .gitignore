@@ -4,6 +4,7 @@
 
 # Datos descargados — demasiado grandes para git
 data/
+graphify-out/
 
 # Python
 __pycache__/

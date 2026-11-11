@@ -55,6 +55,19 @@ make smoke
 make test              # sin acceso a internet
 ```
 
+### Mapa del código con Graphify
+
+Graphify crea un grafo local del código para consultar arquitectura y relaciones entre módulos desde el asistente. Los datos descargados y las exportaciones quedan fuera del grafo.
+
+```bash
+uv tool install 'graphifyy[sql]'
+uv tool run --from 'graphifyy[sql]' graphify install --project --platform copilot
+uv tool run --from 'graphifyy[sql]' graphify . --code-only
+uv tool run --from 'graphifyy[sql]' graphify cluster-only .
+```
+
+Desde `graphify-out/` se pueden consultar los archivos generados con `uv tool run --from 'graphifyy[sql]' graphify query`, `explain` y `path`. El grafo es local y no se versiona.
+
 ---
 
 ## Servicios Docker
@@ -112,6 +125,49 @@ Opciones útiles de `gold-cx-pivot`:
 | `--metric`      | `fpkm_unstranded`    | Métrica de expresión (`tpm_unstranded` también)  |
 | `--log2`        | desactivado          | Aplica log₂(x + 1) antes de calcular la varianza |
 | `--sample-type` | todos                | Filtra por tipo de muestra (p. ej. `Primary Tumor`) |
+
+---
+
+## Reporte ampliado por caso
+
+Genera un JSON clínico y molecular para un caso por `submitter_id` o UUID. Si el identificador resuelve a más de un caso, el selector prioriza `HISPANIC OR LATINO` y después `TCGA-BRCA`. La salida se guarda en `/data/case_reports/<submitter_id>/report.json`, que el PDF por caso incorpora automáticamente si está en el volumen compartido.
+
+```bash
+docker compose run --rm --no-deps etl tcga case-report TCGA-5L-AAT1
+```
+
+Para generar reportes de todos los casos `HISPANIC OR LATINO` del proyecto (incluye percentiles completos y continúa aunque falle un caso):
+
+```bash
+docker compose run --rm --no-deps etl tcga case-report-batch --project TCGA-BRCA
+```
+
+El lote guarda un `report.json` por `submitter_id` en `data/case_reports/` y se puede reanudar: los reportes válidos y paneles de expresión ya cacheados se reutilizan. `--no-percentiles` omite el cálculo de cohortes; `--limit 10` procesa como máximo diez casos para una prueba.
+
+Para mantener una URL anterior cuando el GDC haya reemplazado el UUID pero el `submitter_id` sea el mismo, registra el UUID antiguo como alias verificado:
+
+```bash
+docker compose run --rm --no-deps etl tcga case-report TCGA-5L-AAT1 \
+  --legacy-case-id 16fc3677-0393-4ed1-adf3-c8355f056369 --refresh
+```
+
+La web solo resuelve ese alias si coincide con el reporte cacheado y con el mismo `submitter_id` en Silver.
+
+El inventario lista archivos abiertos y controlados, pero solo descarga archivos `access=open`. El reporte reúne clínica expandida, seguimiento, TNM, receptores clínicos disponibles, mutaciones driver, CNV, expresión, anotaciones, cronología y capas faltantes. Los suplementos curados son opcionales:
+
+```bash
+docker compose run --rm --no-deps etl tcga case-report TCGA-5L-AAT1 \
+  --cdr /data/TCGA-CDR-SupplementalTableS1.xlsx --pam50 /data/pam50.tsv --panc /data/pancanatlas.tsv
+```
+
+Los percentiles por cohorte no se descargan por defecto; activarlos puede recorrer muchos archivos. Incluyen TCGA-BRCA, lobulillares (`8520/3`), hispanos/latinos y lobulillares hispanos/latinos; la caché conserva solo el panel de genes por archivo:
+
+```bash
+docker compose run --rm --no-deps etl tcga case-report TCGA-5L-AAT1 \
+  --percentiles --max-cohort-files 100 --workers 2
+```
+
+También está disponible `python gdc_case_report.py TCGA-5L-AAT1 --out out` para generar `out/TCGA-5L-AAT1/report.json`.
 
 ---
 

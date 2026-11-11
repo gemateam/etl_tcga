@@ -66,6 +66,9 @@ services:
     container_name: tcga-web
     env_file: .env
     environment:
+      # Evita que la URL externa del ETL en .env desvíe localhost a Render.
+      WEB_DATABASE_URL: ""
+      DATABASE_URL: ""
       DATA_DIR: /data
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"

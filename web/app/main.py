@@ -11,12 +11,14 @@ from typing import Any
 from urllib.parse import urlencode
 
 import numpy as np
+from fastapi.encoders import jsonable_encoder
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import analytics, db
+from .config import settings
 
 BASE_DIR = Path(__file__).resolve().parent
 app = FastAPI(title="TCGA Medallion", docs_url=None, redoc_url=None)
@@ -80,6 +82,163 @@ def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
+@app.get("/api/pipeline/visualization")
+def pipeline_visualization(request: Request) -> JSONResponse:
+    project = _project(request)
+    project_filter = "(%s::text IS NULL OR project_id = %s)"
+    project_params = [project, project]
+
+    history = db.safe_query(
+        f"""
+        SELECT step, project_id, status, rows_in, rows_out, started_at, finished_at, error,
+               EXTRACT(EPOCH FROM (COALESCE(finished_at, now()) - started_at))::double precision
+                   AS duration_seconds,
+               CASE
+                   WHEN step LIKE 'extract_%%' OR step = 'download_expressions' THEN 'landing'
+                   WHEN step LIKE 'bronze_%%' THEN 'bronze'
+                   WHEN step LIKE 'silver_%%' THEN 'silver'
+                   ELSE 'gold'
+               END AS layer
+        FROM (
+            SELECT *, row_number() OVER (
+                PARTITION BY step, project_id ORDER BY started_at DESC
+            ) AS step_rank
+            FROM ops.pipeline_runs
+            WHERE {project_filter}
+        ) recent
+        WHERE step_rank <= 12
+        ORDER BY started_at DESC
+        LIMIT 240
+        """,
+        project_params,
+    ) or []
+    daily_runs = db.safe_query(
+        f"""
+        SELECT started_at::date AS run_date, count(*)::integer AS total,
+               count(*) FILTER (WHERE status = 'success')::integer AS success,
+               count(*) FILTER (WHERE status = 'failed')::integer AS failed,
+               count(*) FILTER (WHERE status = 'running')::integer AS running
+        FROM ops.pipeline_runs
+        WHERE started_at >= now() - interval '30 days' AND {project_filter}
+        GROUP BY 1 ORDER BY 1
+        """,
+        project_params,
+    ) or []
+    quality = db.safe_query(
+        """
+        WITH latest AS (
+            SELECT DISTINCT ON (q.step, q.check_name, q.project_id)
+                   q.severity, q.passed
+            FROM ops.dq_results q
+            WHERE (%s::text IS NULL OR q.project_id = %s)
+            ORDER BY q.step, q.check_name, q.project_id, q.created_at DESC
+        )
+        SELECT severity, passed, count(*)::integer AS checks
+        FROM latest GROUP BY severity, passed ORDER BY severity, passed
+        """,
+        project_params,
+    ) or []
+    stages = db.safe_query(
+        """
+        WITH primary_dx AS (
+            SELECT DISTINCT ON (dx.case_id) dx.case_id,
+                   COALESCE(NULLIF(dx.ajcc_pathologic_stage, ''), 'Sin dato') AS stage
+            FROM silver.cases_diagnoses dx
+            JOIN silver.cases c USING (case_id)
+            WHERE (%s::text IS NULL OR c.project_id = %s)
+            ORDER BY dx.case_id, dx.diagnosis_is_primary_disease DESC NULLS LAST,
+                     dx.diagnosis_id
+        )
+        SELECT stage, count(*)::integer AS cases
+        FROM primary_dx GROUP BY stage ORDER BY cases DESC, stage
+        """,
+        project_params,
+    ) or []
+    ages = db.safe_query(
+        """
+        SELECT CASE
+                   WHEN d.age_at_index < 30 THEN '<30'
+                   WHEN d.age_at_index < 40 THEN '30-39'
+                   WHEN d.age_at_index < 50 THEN '40-49'
+                   WHEN d.age_at_index < 60 THEN '50-59'
+                   WHEN d.age_at_index < 70 THEN '60-69'
+                   WHEN d.age_at_index IS NOT NULL THEN '70+'
+                   ELSE 'Sin dato'
+               END AS age_group,
+               count(*)::integer AS cases
+        FROM silver.cases c
+        LEFT JOIN silver.cases_demographics d USING (case_id)
+        WHERE (%s::text IS NULL OR c.project_id = %s)
+        GROUP BY 1
+        ORDER BY min(d.age_at_index) NULLS LAST
+        """,
+        project_params,
+    ) or []
+    top_mutations = db.safe_query(
+        """
+        SELECT m.hugo_symbol AS gene, count(*)::integer AS mutations,
+               count(DISTINCT m.case_id)::integer AS cases
+        FROM silver.mutations m
+        WHERE m.hugo_symbol IS NOT NULL AND (%s::text IS NULL OR m.project_id = %s)
+        GROUP BY m.hugo_symbol
+        ORDER BY cases DESC, mutations DESC, gene LIMIT 15
+        """,
+        project_params,
+    ) or []
+    oncoplot = db.safe_query(
+        """
+        WITH top_genes AS (
+            SELECT m.hugo_symbol
+            FROM silver.mutations m
+            WHERE m.hugo_symbol IS NOT NULL AND (%s::text IS NULL OR m.project_id = %s)
+            GROUP BY m.hugo_symbol
+            ORDER BY count(DISTINCT m.case_id) DESC, m.hugo_symbol LIMIT 12
+        ), top_cases AS (
+            SELECT m.case_id, max(c.submitter_id) AS submitter_id
+            FROM silver.mutations m JOIN silver.cases c USING (case_id)
+            WHERE (%s::text IS NULL OR c.project_id = %s)
+            GROUP BY m.case_id
+            ORDER BY count(*) DESC, m.case_id LIMIT 24
+        )
+        SELECT g.hugo_symbol AS gene, tc.case_id, tc.submitter_id,
+               count(m.mutation_id)::integer AS mutations
+        FROM top_genes g CROSS JOIN top_cases tc
+        LEFT JOIN silver.mutations m
+               ON m.case_id = tc.case_id AND m.hugo_symbol = g.hugo_symbol
+              AND (%s::text IS NULL OR m.project_id = %s)
+        GROUP BY g.hugo_symbol, tc.case_id, tc.submitter_id
+        ORDER BY g.hugo_symbol, tc.submitter_id
+        """,
+        project_params * 3,
+    ) or []
+    expression = db.safe_query(
+        """
+        SELECT gene_name AS gene,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY tpm) AS median_tpm,
+               count(tpm)::integer AS samples
+        FROM gold.sample_marker_values
+        WHERE (%s::text IS NULL OR project_id = %s)
+          AND gene_name = ANY(%s) AND tpm IS NOT NULL
+        GROUP BY gene_name ORDER BY gene_name
+        """,
+        [project, project, ["AURKA", "BRCA1", "CDH1", "ERBB2", "ESR1", "MKI67", "PGR", "TP53"]],
+    ) or []
+
+    return JSONResponse(
+        content=jsonable_encoder({
+            "project": project,
+            "history": history,
+            "daily_runs": daily_runs,
+            "quality": quality,
+            "stages": stages,
+            "ages": ages,
+            "top_mutations": top_mutations,
+            "oncoplot": oncoplot,
+            "expression": expression,
+        }),
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 def status_page(request: Request) -> HTMLResponse:
     projects = _projects_available()
@@ -104,7 +263,12 @@ def status_page(request: Request) -> HTMLResponse:
     qc = db.safe_query(
         """
         SELECT check_name, severity, passed, details, created_at
-        FROM ops.dq_results
+        FROM (
+            SELECT DISTINCT ON (step, check_name)
+                   step, check_name, severity, passed, details, created_at
+            FROM ops.dq_results
+            ORDER BY step, check_name, created_at DESC
+        ) latest
         WHERE NOT passed
         ORDER BY created_at DESC LIMIT 15
         """
@@ -216,6 +380,44 @@ def cases_export(request: Request) -> StreamingResponse:
     )
 
 
+def _resolve_case_alias(case_id: str) -> str:
+    report_root = settings.data_dir / "case_reports"
+    alias_index = report_root / "_aliases.json"
+    if not alias_index.exists():
+        return case_id
+    try:
+        aliases = json.loads(alias_index.read_text(encoding="utf-8"))
+        entry = aliases.get(case_id)
+        if not isinstance(entry, dict):
+            return case_id
+        relative_report = Path(str(entry.get("report", "")))
+        if relative_report.is_absolute() or ".." in relative_report.parts:
+            return case_id
+        report_path = (report_root / relative_report).resolve()
+        if report_root.resolve() not in report_path.parents:
+            return case_id
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return case_id
+
+    identity = report.get("identity") or {}
+    metadata = report.get("metadata") or {}
+    canonical_id = identity.get("case_id")
+    submitter_id = identity.get("submitter_id")
+    if (
+        case_id not in (metadata.get("legacy_case_ids") or [])
+        or case_id not in (entry.get("legacy_case_ids") or [])
+        or canonical_id != entry.get("case_id")
+        or submitter_id != entry.get("submitter_id")
+    ):
+        return case_id
+    matching_case = db.safe_query(
+        "SELECT case_id FROM silver.cases WHERE case_id = %s AND submitter_id = %s",
+        [canonical_id, submitter_id],
+    ) or []
+    return canonical_id if matching_case else case_id
+
+
 def _case_filters(request: Request) -> dict[str, Any]:
     project = _project(request)
     conditions = []
@@ -281,11 +483,15 @@ def _case_rows(filters: dict[str, Any], request: Request) -> tuple[list[dict], i
     page = min(page, pages)
     sql = f"""
         SELECT c.case_id, c.submitter_id, c.project_id, d.sex_at_birth, d.race,
-               d.vital_status, d.age_at_index, dx.primary_diagnosis,
+             d.ethnicity, d.vital_status, d.age_at_index, dx.primary_diagnosis,
                dx.ajcc_pathologic_stage
         {filters['from']}
         {filters['where']}
-        ORDER BY c.submitter_id
+                ORDER BY CASE
+                                     WHEN lower(coalesce(d.ethnicity, '')) = 'hispanic or latino' THEN 0
+                                     ELSE 1
+                                 END,
+                                 c.submitter_id
         LIMIT %s OFFSET %s
     """
     rows = db.safe_query(sql, filters["params"] + [per_page, (page - 1) * per_page]) or []
@@ -331,12 +537,14 @@ def _case_options(project: str | None) -> dict[str, list[str]]:
 
 @app.get("/casos/{case_id}", response_class=HTMLResponse)
 def case_detail(request: Request, case_id: str) -> HTMLResponse:
+    case_id = _resolve_case_alias(case_id)
     case = db.safe_query(
         """
         SELECT c.*, d.demographic_id, d.sex_at_birth, d.race, d.ethnicity,
                d.vital_status, d.days_to_death, d.days_to_birth, d.age_at_index,
                d.year_of_birth, d.year_of_death, d.cause_of_death, d.marital_status,
-               d.education_level, d.country_of_residence_at_enrollment
+             d.education_level, d.country_of_residence_at_enrollment, d.state,
+             d.demographic_updated_at
         FROM silver.cases c
         LEFT JOIN silver.cases_demographics d USING (case_id)
         WHERE c.case_id = %s
@@ -364,6 +572,16 @@ def case_detail(request: Request, case_id: str) -> HTMLResponse:
     files = db.safe_query(
         "SELECT * FROM silver.files WHERE case_id = %s ORDER BY file_name", [case_id]
     ) or []
+    report_path = settings.data_dir / "case_reports" / str(case[0].get("submitter_id") or case_id) / "report.json"
+    case_report = None
+    if report_path.exists():
+        try:
+            case_report = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            case_report = None
+    mutation_count = db.safe_scalar(
+        "SELECT count(*) FROM silver.mutations WHERE case_id = %s", [case_id]
+    ) or 0
     # Identifica qué diagnóstico corresponde a los archivos de expresión
     # Un diagnóstico "corresponde" si es de tejido mamario o es el diagnóstico primario de la enfermedad
     has_multi_dx = len([d for d in (db.safe_query(
@@ -380,14 +598,54 @@ def case_detail(request: Request, case_id: str) -> HTMLResponse:
             exposures=exposures,
             samples=samples,
             files=files,
+            mutation_count=mutation_count,
             has_multi_dx=has_multi_dx,
+            case_report=case_report,
         ),
+    )
+
+
+@app.get("/casos/{case_id}/mutaciones", response_class=HTMLResponse)
+def case_mutations(request: Request, case_id: str) -> HTMLResponse:
+    """HTMX: tabla paginada con todas las mutaciones silver de un caso."""
+    case_id = _resolve_case_alias(case_id)
+    page_size = 100
+    total = int(db.safe_scalar(
+        "SELECT count(*) FROM silver.mutations WHERE case_id = %s", [case_id]
+    ) or 0)
+    page_count = max(1, (total + page_size - 1) // page_size)
+    try:
+        page = int(request.query_params.get("page", "1"))
+    except ValueError:
+        page = 1
+    page = min(max(page, 1), page_count)
+    mutations = db.safe_query(
+        """
+        SELECT * FROM silver.mutations
+        WHERE case_id = %s
+        ORDER BY chromosome, start_position, mutation_id
+        LIMIT %s OFFSET %s
+        """,
+        [case_id, page_size, (page - 1) * page_size],
+    ) or []
+    return templates.TemplateResponse(
+        "partials/case_mutations.html",
+        {
+            "request": request,
+            "case_id": case_id,
+            "mutations": mutations,
+            "total": total,
+            "page": page,
+            "page_count": page_count,
+            "page_size": page_size,
+        },
     )
 
 
 @app.get("/casos/{case_id}/pdf", response_class=HTMLResponse)
 def case_pdf(request: Request, case_id: str) -> HTMLResponse:
     """Vista de impresión/PDF con todos los datos expandidos (sin HTMX lazy)."""
+    case_id = _resolve_case_alias(case_id)
     case = db.safe_query(
         """
         SELECT c.*, d.demographic_id, d.sex_at_birth, d.race, d.ethnicity,
@@ -402,6 +660,13 @@ def case_pdf(request: Request, case_id: str) -> HTMLResponse:
     )
     if not case:
         return HTMLResponse("<p>Caso no encontrado.</p>", status_code=404)
+    report_path = settings.data_dir / "case_reports" / str(case[0].get("submitter_id") or case_id) / "report.json"
+    case_report = None
+    if report_path.exists():
+        try:
+            case_report = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            case_report = None
     diagnoses = db.safe_query(
         "SELECT * FROM silver.cases_diagnoses WHERE case_id = %s ORDER BY diagnosis_id",
         [case_id],
@@ -464,6 +729,8 @@ def case_pdf(request: Request, case_id: str) -> HTMLResponse:
             "marker_sample_id": marker_sample_id,
             "top_genes": top_genes,
             "expr_file_id": expr_file_id,
+            "case_report": case_report,
+            "case_report_path": str(report_path),
             "project": case[0].get("project_id"),
             "generated_at": datetime.datetime.utcnow().strftime("%d/%m/%Y %H:%M"),
         },
@@ -509,13 +776,20 @@ def case_markers(request: Request, case_id: str) -> HTMLResponse:
 
 @app.get("/casos/{case_id}/expresion/tabla", response_class=HTMLResponse)
 def case_expression_table(request: Request, case_id: str) -> HTMLResponse:
-    """HTMX: top genes de un archivo de expresión, filtrable por tipo."""
+    """HTMX: genes de un archivo de expresión, filtrables y paginados."""
     file_id = request.query_params.get("file_id", "")
     gene_type = request.query_params.get("gene_type", "") or None
-    limit = min(int(request.query_params.get("limit", "50")), 200)
+    try:
+        limit = min(max(int(request.query_params.get("limit", "50")), 1), 200)
+        offset = max(0, int(request.query_params.get("offset", "0")))
+    except ValueError:
+        limit, offset = 50, 0
     if not file_id:
         return HTMLResponse("<p class='muted'>Selecciona un archivo.</p>")
-    rows = analytics.expression_top_genes(file_id, limit=limit, gene_type_filter=gene_type)
+    rows = analytics.expression_top_genes(
+        file_id, limit=limit, gene_type_filter=gene_type, offset=offset
+    )
+    total = analytics.expression_gene_count(file_id, gene_type)
     gene_types = analytics.expression_gene_types(file_id)
     return templates.TemplateResponse(
         "partials/expression_table.html",
@@ -527,6 +801,8 @@ def case_expression_table(request: Request, case_id: str) -> HTMLResponse:
             "gene_type": gene_type or "",
             "gene_types": gene_types,
             "limit": limit,
+            "offset": offset,
+            "total": total,
         },
     )
 

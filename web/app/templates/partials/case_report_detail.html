@@ -1,0 +1,166 @@
+<section class="card case-report" id="gdc-report-section">
+  <div class="row-between">
+    <h2>Reporte ampliado GDC</h2>
+    {% if case_report.get('identity', {}).get('hispanic_latino_priority') %}
+    <strong class="dx-badge dx-badge-primary">Prioridad hispana/latina</strong>
+    {% endif %}
+  </div>
+  <p class="muted small">
+    {{ case_report.get('metadata', {}).get('gdc_data_release') or 'GDC' }}
+    {% if case_report.get('metadata', {}).get('generated_at_utc') %}
+      · Generado {{ case_report.get('metadata', {}).get('generated_at_utc') }}
+    {% endif %}
+  </p>
+  <dl class="kv">
+    <dt>Etnicidad</dt><dd>{{ case_report.get('identity', {}).get('ethnicity') or case.ethnicity or '—' }}</dd>
+    <dt>Prioridad de cohorte</dt><dd>{{ 'Sí, hispana/latina' if case_report.get('identity', {}).get('hispanic_latino_priority') else 'No identificada como hispana/latina' }}</dd>
+  </dl>
+
+  <details class="record-details" open>
+    <summary>Supervivencia y estadio TNM</summary>
+    {% set survival = case_report.get('survival', {}) %}
+    <dl class="kv mt-1">
+      <dt>Estado vital</dt><dd>{{ survival.get('vital_status') or '—' }}</dd>
+      <dt>Días de seguimiento</dt><dd>{{ survival.get('days_to_last_follow_up') if survival.get('days_to_last_follow_up') is not none else '—' }}</dd>
+      <dt>Registros de seguimiento</dt><dd>{{ survival.get('follow_up_records', 0) }}</dd>
+    </dl>
+    {% if case_report.get('stage_tnm') %}
+    <div class="table-scroll"><table class="table compact">
+      <thead><tr><th>Diagnóstico</th><th>Estadio</th><th>T</th><th>N</th><th>M</th></tr></thead>
+      <tbody>{% for stage in case_report.get('stage_tnm', []) %}
+        <tr><td>{{ stage.get('primary_diagnosis') or '—' }}</td><td>{{ stage.get('stage') or '—' }}</td><td>{{ stage.get('t') or '—' }}</td><td>{{ stage.get('n') or '—' }}</td><td>{{ stage.get('m') or '—' }}</td></tr>
+        {% if stage.get('stage_note') %}<tr><td colspan="5" class="muted small">{{ stage.get('stage_note') }}</td></tr>{% endif %}
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+  </details>
+
+  <details class="record-details" open>
+    <summary>Marcadores clínicos y moleculares</summary>
+    <h3>Receptores clínicos · IHQ/FISH</h3>
+    <p class="muted small">La expresión de ARN se muestra por separado y no confirma positividad clínica.</p>
+    <div class="table-scroll"><table class="table compact">
+      <thead><tr><th>Receptor</th><th>Resultado clínico</th><th>Prueba</th><th>ARN TPM</th></tr></thead>
+      <tbody>{% for receptor in ['ER', 'PR', 'HER2'] %}
+        {% set group = case_report.get('receptors_clinical', {}).get(receptor, {}) %}
+        {% set tests = group.get('molecular_tests', []) + group.get('clinical_supplement', []) %}
+        {% set gene = {'ER':'ESR1','PR':'PGR','HER2':'ERBB2'}[receptor] %}
+        {% if tests %}{% for test in tests %}
+          <tr><td><strong>{{ receptor }}</strong></td><td>{{ test.get('result') or test.get('value') or test.get('test_result') or '—' }}</td><td>{{ test.get('method') or test.get('test') or test.get('field') or test.get('source') or '—' }}</td><td>{{ case_report.get('receptors_expression', {}).get('values_tpm', {}).get(gene, '—') }}</td></tr>
+        {% endfor %}{% else %}
+          <tr><td><strong>{{ receptor }}</strong></td><td class="muted">Sin resultado IHQ/FISH</td><td>—</td><td>{{ case_report.get('receptors_expression', {}).get('values_tpm', {}).get(gene, '—') }}</td></tr>
+        {% endif %}
+      {% endfor %}</tbody>
+    </table></div>
+
+    <h3>Mutaciones somáticas · genes driver</h3>
+    {% if case_report.get('mutations') %}
+    <div class="table-scroll"><table class="table compact">
+      <thead><tr><th>Gen</th><th>Cambio ADN</th><th>Clase</th><th>Cambio AA</th><th>Consecuencia</th></tr></thead>
+      <tbody>{% for mutation in case_report.get('mutations', [])[:100] %}
+        <tr><td>{{ mutation.get('gene') or '—' }}</td><td class="mono">{{ mutation.get('dna_change') or '—' }}</td><td>{{ mutation.get('subtype') or mutation.get('variant_type') or '—' }}</td><td>{{ mutation.get('aa_change') or '—' }}</td><td>{{ mutation.get('consequence') or '—' }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="muted small">Sin mutaciones driver disponibles en fuentes abiertas.</p>{% endif %}
+
+    {% if case_report.get('copy_number') %}
+    <h3>Número de copias</h3>
+    <div class="table-scroll"><table class="table compact">
+      <thead><tr><th>Gen</th><th>Región</th><th>Copias</th><th>Rango</th></tr></thead>
+      <tbody>{% for item in case_report.get('copy_number', []) %}
+        <tr><td>{{ item.get('gene_name') or item.get('gene') or '—' }}</td><td>{{ item.get('chromosome') or '—' }}:{{ item.get('start') or '—' }}–{{ item.get('end') or '—' }}</td><td>{{ item.get('copy_number') or '—' }}</td><td>{{ item.get('min_copy_number') or '—' }}–{{ item.get('max_copy_number') or '—' }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+
+    {% if case_report.get('expression_panel') %}
+    <h3>Expresión ampliada · TPM y log2(TPM+1)</h3>
+    <div class="table-scroll"><table class="table compact">
+      <thead><tr><th>Gen</th><th>TPM</th><th>log2(TPM+1)</th><th>FPKM</th><th>Counts</th></tr></thead>
+      <tbody>{% for item in case_report.get('expression_panel', []) %}
+        <tr><td><strong>{{ item.get('gene') }}</strong></td><td>{{ '%.2f'|format(item.get('tpm')) if item.get('tpm') is not none else '—' }}</td><td>{{ '%.4f'|format(item.get('log2_tpm_plus_1')) if item.get('log2_tpm_plus_1') is not none else '—' }}</td><td>{{ '%.4f'|format(item.get('fpkm')) if item.get('fpkm') is not none else '—' }}</td><td>{{ item.get('counts') if item.get('counts') is not none else '—' }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+
+    <h3>Percentiles de expresión · prioridad hispana/latina</h3>
+    {% for key, label in [('percentiles_all_brca','TCGA-BRCA'), ('percentiles_lobular','Lobulillares'), ('percentiles_hispanic','Hispanos/latinos'), ('percentiles_lobular_hispanic','Lobulillares hispanos/latinos')] %}
+      {% set values = case_report.get(key, {}) %}
+      <h4>{{ label }}</h4>
+      {% if values %}
+      <div class="table-scroll"><table class="table compact">
+        <thead><tr><th>Gen</th><th>TPM</th><th>Percentil</th><th>Nivel</th><th>N cohorte</th></tr></thead>
+        <tbody>{% for gene, value in values.items() %}
+          <tr><td>{{ gene }}</td><td>{{ value.get('tpm') }}</td><td>p{{ value.get('percentil') }}</td><td>{{ value.get('nivel') }}</td><td>{{ value.get('n_cohorte') }}</td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+      {% else %}<p class="muted small">No calculado o sin muestra suficiente.</p>{% endif %}
+    {% endfor %}
+  </details>
+
+  <details class="record-details">
+    <summary>Seguimientos, muestras y cronología</summary>
+    {% if case_report.get('clinical', {}).get('follow_ups') %}
+    <h3>Seguimientos</h3>
+    <div class="table-scroll"><table class="table compact">
+      <thead><tr><th>Día</th><th>Respuesta</th><th>Progresión / recurrencia</th><th>Evento</th></tr></thead>
+      <tbody>{% for follow_up in case_report.get('clinical', {}).get('follow_ups', []) %}
+        <tr><td>{{ follow_up.get('days_to_follow_up') if follow_up.get('days_to_follow_up') is not none else '—' }}</td><td>{{ follow_up.get('disease_response') or '—' }}</td><td>{{ follow_up.get('progression_or_recurrence') or '—' }}</td><td>{{ follow_up.get('first_event') or '—' }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    {% if case_report.get('clinical', {}).get('family_histories') %}
+    <h3>Antecedentes familiares</h3>
+    <div class="table-scroll"><table class="table compact">
+      <thead><tr><th>Parentesco</th><th>Diagnóstico</th><th>Edad</th><th>Antecedente</th></tr></thead>
+      <tbody>{% for history in case_report.get('clinical', {}).get('family_histories', []) %}
+        <tr><td>{{ history.get('relationship_type') or '—' }}</td><td>{{ history.get('relationship_primary_diagnosis') or '—' }}</td><td>{{ history.get('relationship_age_at_diagnosis') if history.get('relationship_age_at_diagnosis') is not none else '—' }}</td><td>{{ history.get('relative_with_cancer_history') or '—' }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    {% if case_report.get('clinical', {}).get('samples') %}
+    <h3>Biospecimen y calidad de tejido</h3>
+    <div class="table-scroll"><table class="table compact">
+      <thead><tr><th>Muestra</th><th>Tipo</th><th>Tejido</th><th>Preservación</th><th>Porciones</th></tr></thead>
+      <tbody>{% for sample in case_report.get('clinical', {}).get('samples', []) %}
+        <tr><td class="mono">{{ sample.get('submitter_id') or sample.get('sample_id') or '—' }}</td><td>{{ sample.get('sample_type') or '—' }}</td><td>{{ sample.get('tissue_type') or sample.get('biospecimen_anatomic_site') or '—' }}</td><td>{{ sample.get('preservation_method') or '—' }}</td><td>{{ sample.get('portions', [])|length }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    {% if case_report.get('timeline') %}
+    <h3>Cronología relativa</h3>
+    <div class="table-scroll"><table class="table compact">
+      <thead><tr><th>Día</th><th>Tipo</th><th>Evento</th><th>Estado / respuesta</th></tr></thead>
+      <tbody>{% for event in case_report.get('timeline', []) %}
+        <tr><td>{{ event.get('day') if event.get('day') is not none else '—' }}</td><td>{{ event.get('kind') }}</td><td>{{ event.get('label') }}</td><td>{{ event.get('status') or event.get('outcome') or event.get('administered') or '—' }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+  </details>
+
+  <details class="record-details">
+    <summary>Interpretación, archivos y calidad de datos</summary>
+    {% if case_report.get('diagnosis_interpretation') %}
+    <h3>Interpretación diagnóstica</h3>
+    {% for item in case_report.get('diagnosis_interpretation', []) %}
+    <p><strong>{{ item.get('primary_diagnosis') or 'Diagnóstico' }}</strong> · {{ item.get('laterality') or 'lateralidad sin dato' }} · {{ item.get('classification') or 'clasificación sin dato' }}. {{ item.get('lesion_sample_link') or '' }}</p>
+    {% endfor %}
+    {% endif %}
+    {% if case_report.get('files_inventory', {}).get('by_data_type') %}
+    <h3>Inventario de archivos GDC</h3>
+    <dl class="kv">{% for kind, count in case_report.get('files_inventory', {}).get('by_data_type', {}).items() %}<dt>{{ kind }}</dt><dd>{{ count }}</dd>{% endfor %}</dl>
+    {% endif %}
+    {% for url in case_report.get('file_links', {}).get('pathology_reports', []) %}<p><a href="{{ url }}" target="_blank" rel="noopener">Abrir reporte de patología en GDC</a></p>{% endfor %}
+    {% for url in case_report.get('file_links', {}).get('slide_images', []) %}<p><a href="{{ url }}" target="_blank" rel="noopener">Abrir lámina diagnóstica en GDC</a></p>{% endfor %}
+    <p class="muted small">Los archivos con acceso controlado solo se listan; este reporte no los descarga.</p>
+    {% if case_report.get('annotations') %}
+    <h3>Anotaciones de calidad</h3>
+    <ul class="tight">{% for annotation in case_report.get('annotations', []) %}<li>{{ annotation.get('category') or 'Anotación' }} · {{ annotation.get('classification') or '—' }} · {{ annotation.get('status') or '—' }}{% if annotation.get('notes') %}: {{ annotation.get('notes') }}{% endif %}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if case_report.get('curated') %}
+    <h3>Tablas curadas locales</h3>
+    {% for name, value in case_report.get('curated', {}).items() %}<h4>{{ name }}</h4>{% if value %}<pre class="curated-data">{{ value|tojson(indent=2) }}</pre>{% else %}<p class="muted small">No suministrada o sin fila para este caso.</p>{% endif %}{% endfor %}
+    {% endif %}
+    {% if case_report.get('warnings') %}<h3>Capas faltantes o advertencias</h3><ul class="tight">{% for warning in case_report.get('warnings', []) %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}
+  </details>
+</section>

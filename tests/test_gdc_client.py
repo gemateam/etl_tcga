@@ -56,6 +56,7 @@ class FakeSession:
     def __init__(self, responses: list[FakeResponse]):
         self.responses = responses
         self.calls: list[dict[str, Any]] = []
+        self.headers: dict[str, str] = {}
 
     def request(self, method: str, url: str, **kwargs: Any) -> FakeResponse:
         self.calls.append({"method": method, "url": url, **kwargs})

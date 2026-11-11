@@ -1,6 +1,52 @@
 {% extends "base.html" %}
 {% block title %}Estado · TCGA Medallion{% endblock %}
+{% block head %}<script src="/static/vendor/plotly.min.js"></script>{% endblock %}
 {% block content %}
+<section class="pipeline-dashboard" aria-labelledby="pipeline-dashboard-title">
+  <div class="page-head">
+    <h1 id="pipeline-dashboard-title">Visualización del pipeline</h1>
+    <p class="muted">Ejecuciones, volumen de datos y señales biológicas{% if project %} · {{ project }}{% endif %}</p>
+  </div>
+  <section class="card">
+    <div class="row-between">
+      <h2>Flujo ETL por etapa</h2>
+      <span class="muted small">El color representa la última ejecución; pasa el cursor para ver detalles.</span>
+    </div>
+    <div id="pipeline-dag" class="chart pipeline-dag" role="img" aria-label="Flujo de pasos ETL y su estado"></div>
+  </section>
+  <div class="grid cards-2">
+    <section class="card">
+      <h2>Duración por ejecución</h2>
+      <div id="pipeline-duration" class="chart" role="img" aria-label="Duración de los pasos ETL a lo largo del tiempo"></div>
+    </section>
+    <section class="card">
+      <h2>Ejecuciones por día</h2>
+      <div id="pipeline-history" class="chart" role="img" aria-label="Ejecuciones exitosas, fallidas y en curso por día"></div>
+    </section>
+    <section class="card">
+      <h2>Filas de salida por paso</h2>
+      <div id="pipeline-rows" class="chart" role="img" aria-label="Filas procesadas por paso y capa medallion"></div>
+    </section>
+    <section class="card">
+      <h2>Calidad de datos</h2>
+      <div id="pipeline-quality" class="chart" role="img" aria-label="Controles de calidad aprobados y fallidos por severidad"></div>
+    </section>
+  </div>
+  <section class="card">
+    <div class="row-between">
+      <h2>Panorama biológico de la cohorte</h2>
+      <span class="muted small">Resumen de datos disponibles en silver y gold.</span>
+    </div>
+    <div class="grid cards-2">
+      <div><h3>Casos por estadio</h3><div id="biology-stages" class="chart small-chart" role="img" aria-label="Casos por estadio"></div></div>
+      <div><h3>Casos por edad</h3><div id="biology-ages" class="chart small-chart" role="img" aria-label="Casos por grupo de edad"></div></div>
+      <div><h3>Genes más mutados</h3><div id="biology-mutations" class="chart" role="img" aria-label="Genes con más casos mutados"></div></div>
+      <div><h3>Oncoplot · genes y casos</h3><div id="biology-oncoplot" class="chart" role="img" aria-label="Matriz de mutaciones por gen y caso"></div></div>
+      <div><h3>Expresión de marcadores · mediana TPM</h3><div id="biology-expression" class="chart small-chart" role="img" aria-label="Mediana TPM de genes marcadores"></div></div>
+    </div>
+  </section>
+</section>
+
 <section class="page-head">
   <h1>Estado del pipeline</h1>
   <p class="muted">Versión de datos, avance de descargas y últimas ejecuciones.</p>
@@ -109,3 +155,4 @@
 </section>
 {% endif %}
 {% endblock %}
+{% block scripts %}<script src="/static/pipeline-dashboard.js" defer></script>{% endblock %}

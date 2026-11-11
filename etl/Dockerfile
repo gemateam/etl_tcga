@@ -35,6 +35,8 @@ RUN groupadd --gid 10001 app \
 WORKDIR /app
 
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
+COPY --chown=app:app etl/pyproject.toml /app/pyproject.toml
+COPY --chown=app:app etl/src /app/src
 COPY --chown=app:app sql /sql
 COPY --chown=app:app tests /app/tests
 COPY --chown=app:app etl/scheduler.sh /opt/scheduler.sh

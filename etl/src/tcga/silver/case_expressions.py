@@ -23,6 +23,7 @@ def silver_case_expressions(
     bronze_files = settings.bronze_root() / "files" / "**" / "files.parquet"
     if not any((settings.bronze_root() / "files").glob("**/files.parquet")):
         raise FileNotFoundError(f"Falta {bronze_files}; ejecuta bronze-files.")
+    out_root.mkdir(parents=True, exist_ok=True)
 
     for project in projects:
         with pipeline_step("silver_case_expressions", project) as run:

@@ -4,19 +4,16 @@ from __future__ import annotations
 
 import gzip
 import hashlib
-import io
 import shutil
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
+import pyarrow.parquet as pq
 
 from ..config import Settings, get_settings
 from ..db import connect, copy_rows
-from ..duck import write_parquet
 from ..gdc import GDCClient
-from ..gdc.maf_fields import MAF_COLUMNS
 from ..landing.mutations import read_maf_manifest
 from ..logging_utils import get_logger
 from ..ops.runs import pipeline_step, record_dq, recorded_release
@@ -29,6 +26,7 @@ _BRONZE_COLS: tuple[str, ...] = (
     "file_id",
     "case_id",
     "case_submitter_id",
+    "tumor_sample_barcode",
     "project_id",
     "hugo_symbol",
     "entrez_gene_id",
@@ -64,6 +62,7 @@ MAF_SCHEMA = pa.schema([
     pa.field("file_id",               pa.string()),
     pa.field("case_id",               pa.string()),
     pa.field("case_submitter_id",     pa.string()),
+    pa.field("tumor_sample_barcode",  pa.string()),
     pa.field("project_id",            pa.string()),
     pa.field("hugo_symbol",           pa.string()),
     pa.field("entrez_gene_id",        pa.string()),
@@ -116,6 +115,17 @@ def _none_if_empty(v: Any) -> str | None:
     return None if s in ("", ".", "NA", "N/A") else s
 
 
+def _sample_barcode(v: Any) -> str | None:
+    """TCGA-XX-XXXX-01A-... -> TCGA-XX-XXXX-01A (barcode de muestra)."""
+    s = _none_if_empty(v)
+    if not s:
+        return None
+    parts = s.split("-")
+    if len(parts) < 4:
+        return None
+    return "-".join(parts[:4])
+
+
 def _mutation_id(file_id: str, case_id: str, chrom: str, start: Any, ref: str, alt: str) -> str:
     """ID determinista: file_id + posición genómica."""
     key = f"{file_id}:{case_id}:{chrom}:{start}:{ref}:{alt}"
@@ -156,6 +166,7 @@ def _parse_maf_lines(
             "file_id":                file_id,
             "case_id":                case_id,
             "case_submitter_id":      case_submitter_id,
+            "tumor_sample_barcode":   _sample_barcode(raw.get("Tumor_Sample_Barcode")),
             "project_id":             project_id,
             "hugo_symbol":            _none_if_empty(raw.get("Hugo_Symbol")),
             "entrez_gene_id":         _none_if_empty(raw.get("Entrez_Gene_Id")),
@@ -207,76 +218,87 @@ def bronze_mutations(
             shutil.rmtree(out_dir, ignore_errors=True)
             out_dir.mkdir(parents=True, exist_ok=True)
 
-            all_rows: list[dict[str, Any]] = []
             files_ok = 0
+            total_rows = 0
+            parquet_path = out_dir / "mutations.parquet"
 
-            for hit in hits:
-                file_id = hit.get("file_id")
-                if not file_id:
-                    continue
-                cases = hit.get("cases") or []
-                case = cases[0] if cases else {}
-                case_id = case.get("case_id") or ""
-                case_submitter_id = case.get("submitter_id") or ""
-                project_id = (case.get("project") or {}).get("project_id") or project
+            with connect() as conn:
+                conn.execute(
+                    "DELETE FROM bronze.mutations WHERE project_id = %s", (project,)
+                )
 
-                try:
-                    # Descarga directa (archivo único → GDC devuelve .gz o texto plano)
-                    tmp = out_dir / f"{file_id}.tmp"
-                    client.download_batch([file_id], tmp)
+            writer: pq.ParquetWriter | None = None
+            try:
+                for hit in hits:
+                    file_id = hit.get("file_id")
+                    if not file_id:
+                        continue
+                    cases = hit.get("cases") or []
+                    case = cases[0] if cases else {}
+                    case_id = case.get("case_id") or ""
+                    case_submitter_id = case.get("submitter_id") or ""
+                    project_id = (case.get("project") or {}).get("project_id") or project
 
-                    # Descomprime si es gzip
-                    if tmp.read_bytes(2) == b"\x1f\x8b":
-                        with gzip.open(tmp, "rt", encoding="utf-8", errors="replace") as fh:
-                            lines = fh.readlines()
-                    else:
-                        lines = tmp.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+                    try:
+                        tmp = out_dir / f"{file_id}.tmp"
+                        client.download_batch([file_id], tmp)
 
-                    tmp.unlink(missing_ok=True)
+                        with tmp.open("rb") as _fh:
+                            _magic = _fh.read(2)
+                        if _magic == b"\x1f\x8b":
+                            with gzip.open(tmp, "rt", encoding="utf-8", errors="replace") as fh:
+                                lines = fh.readlines()
+                        else:
+                            lines = tmp.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
 
-                    rows = _parse_maf_lines(
-                        lines, file_id, case_id, case_submitter_id, project_id, release
-                    )
-                    all_rows.extend(rows)
+                        tmp.unlink(missing_ok=True)
+                        rows = _parse_maf_lines(
+                            lines, file_id, case_id, case_submitter_id, project_id, release
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        log.warning(
+                            "Error procesando MAF %s: %s",
+                            file_id,
+                            exc,
+                            extra={"event": "maf_file_error", "file_id": file_id},
+                        )
+                        continue
+
+                    if rows:
+                        table = pa.Table.from_pylist(rows, schema=MAF_SCHEMA)
+                        if writer is None:
+                            writer = pq.ParquetWriter(
+                                parquet_path, MAF_SCHEMA, compression="zstd"
+                            )
+                        writer.write_table(table)
+                        with connect() as conn:
+                            copy_rows(
+                                conn,
+                                "bronze.mutations",
+                                list(_BRONZE_COLS),
+                                (tuple(row[column] for column in _BRONZE_COLS) for row in rows),
+                            )
+                        total_rows += len(rows)
+
                     files_ok += 1
                     log.info(
                         "MAF procesado",
                         extra={"event": "maf_file_ok", "file_id": file_id, "mutations": len(rows)},
                     )
-                except Exception as exc:  # noqa: BLE001
-                    log.warning(
-                        "Error procesando MAF %s: %s",
-                        file_id,
-                        exc,
-                        extra={"event": "maf_file_error", "file_id": file_id},
-                    )
+            finally:
+                if writer is not None:
+                    writer.close()
 
-            # Escribe Parquet
-            if all_rows:
-                write_parquet(out_dir / "mutations.parquet", all_rows, MAF_SCHEMA)
+            if writer is None:
+                pq.write_table(MAF_SCHEMA.empty_table(), parquet_path, compression="zstd")
 
-            # Carga en PostgreSQL
-            with connect() as conn:
-                conn.execute(
-                    "DELETE FROM bronze.mutations WHERE project_id = %s", (project,)
-                )
-                copy_rows(
-                    conn,
-                    "bronze.mutations",
-                    list(_BRONZE_COLS),
-                    [
-                        tuple(r[c] for c in _BRONZE_COLS)
-                        for r in all_rows
-                    ],
-                )
-
-            run.count(rows_in=len(hits), rows_out=len(all_rows))
+            run.count(rows_in=len(hits), rows_out=total_rows)
 
             record_dq(
                 run.run_id, run.step, project,
                 "maf_bronze_not_empty", "warning",
-                len(all_rows) > 0,
-                f"mutaciones={len(all_rows)} archivos_ok={files_ok}/{len(hits)}",
+                total_rows > 0,
+                f"mutaciones={total_rows} archivos_ok={files_ok}/{len(hits)}",
             )
             record_dq(
                 run.run_id, run.step, project,
@@ -285,12 +307,12 @@ def bronze_mutations(
                 f"ok={files_ok} total={len(hits)}",
             )
 
-            result[project] = len(all_rows)
+            result[project] = total_rows
             log.info(
                 "Bronze de mutaciones",
                 extra={
                     "event": "bronze_mutations",
-                    "rows": len(all_rows),
+                    "rows": total_rows,
                     "files": files_ok,
                 },
             )

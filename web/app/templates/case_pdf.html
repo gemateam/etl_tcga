@@ -510,6 +510,214 @@
       {% endif %}
     </div>
 
+    {# ---- Complemento GDC generado por tcga case-report ---- #}
+    {% if case_report %}
+    {% set identity = case_report.get('identity', {}) %}
+    {% set survival = case_report.get('survival', {}) %}
+    <div class="section page-break-before">
+      <div class="section-title">Reporte complementario GDC</div>
+      <div class="markers-note">
+        {% if identity.get('hispanic_latino_priority') %}
+        <strong>Prioridad hispana/latina</strong> · Etnicidad autorreportada: {{ identity.get('ethnicity') }}.
+        {% else %}
+        Prioridad hispana/latina: no confirmada · Etnicidad GDC: {{ identity.get('ethnicity') or 'sin dato' }}.
+        {% endif %}
+        Data Release {{ case_report.get('metadata', {}).get('gdc_data_release') or 'no disponible' }} ·
+        Reporte generado {{ case_report.get('metadata', {}).get('generated_at_utc') or 'sin fecha' }}.
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Seguimiento y supervivencia</div>
+          <dl class="kv">
+            <dt>Estado vital</dt><dd>{{ survival.get('vital_status') or '—' }}</dd>
+            <dt>Días a muerte</dt><dd>{{ survival.get('days_to_death') if survival.get('days_to_death') is not none else '—' }}</dd>
+            <dt>Último seguimiento</dt><dd>{{ survival.get('days_to_last_follow_up') if survival.get('days_to_last_follow_up') is not none else '—' }} días</dd>
+            <dt>Registros de seguimiento</dt><dd>{{ survival.get('follow_up_records', 0) }}</dd>
+          </dl>
+          <p class="tiny muted">{{ survival.get('interpretation') or '' }}</p>
+        </div>
+        <div class="card">
+          <div class="card-title">Estadio y TNM</div>
+          {% if case_report.get('stage_tnm') %}
+          <table><thead><tr><th>Diagnóstico</th><th>Estadio</th><th>T</th><th>N</th><th>M</th></tr></thead>
+            <tbody>{% for s in case_report.get('stage_tnm', []) %}
+              <tr><td>{{ s.get('primary_diagnosis') or '—' }}</td><td>{{ s.get('stage') or '—' }}</td><td>{{ s.get('t') or '—' }}</td><td>{{ s.get('n') or '—' }}</td><td>{{ s.get('m') or '—' }}</td></tr>
+              {% if s.get('stage_note') %}<tr><td colspan="5" class="muted tiny">{{ s.get('stage_note') }}</td></tr>{% endif %}
+            {% endfor %}</tbody>
+          </table>
+          {% else %}<p class="muted small">Sin TNM registrado.</p>{% endif %}
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Biospecimen y calidad de tejido</div>
+        {% set report_samples = case_report.get('clinical', {}).get('samples', []) %}
+        {% if report_samples %}
+        <table><thead><tr><th>Muestra</th><th>Tipo</th><th>Tejido / lesión</th><th>Preservación</th><th>Porciones / analitos / alícuotas</th><th>Núcleos tumorales</th><th>Necrosis</th></tr></thead>
+          <tbody>
+          {% for s in report_samples %}
+            {% set ns = namespace(slides=[], analytes=[], aliquots=[]) %}
+            {% for portion in s.get('portions', []) %}
+              {% for analyte in portion.get('analytes', []) %}
+                {% set ns.analytes = ns.analytes + [analyte] %}
+                {% for aliquot in analyte.get('aliquots', []) %}{% set ns.aliquots = ns.aliquots + [aliquot] %}{% endfor %}
+              {% endfor %}
+              {% for slide in portion.get('slides', []) %}{% set ns.slides = ns.slides + [slide] %}{% endfor %}
+            {% endfor %}
+            {% set first_slide = ns.slides[0] if ns.slides else {} %}
+            <tr>
+              <td class="mono">{{ s.get('submitter_id') or s.get('sample_id') or '—' }}</td>
+              <td>{{ s.get('sample_type') or '—' }}<div class="tiny muted">{{ s.get('tumor_descriptor') or '' }}</div></td>
+              <td>{{ s.get('tissue_type') or s.get('biospecimen_anatomic_site') or '—' }} · {{ s.get('biospecimen_laterality') or 'lateralidad sin dato' }}</td>
+              <td>{{ s.get('preservation_method') or '—' }}{% if s.get('freezing_method') %}<div class="tiny muted">{{ s.get('freezing_method') }}</div>{% endif %}</td>
+              <td>{{ s.get('portions', [])|length }} / {{ ns.analytes|length }} / {{ ns.aliquots|length }} · {{ ns.slides|length }} láminas</td>
+              <td>{{ first_slide.get('percent_tumor_nuclei') if first_slide.get('percent_tumor_nuclei') is not none else '—' }}{% if first_slide.get('percent_tumor_nuclei') is not none %}%{% endif %}</td>
+              <td>{{ first_slide.get('percent_necrosis') if first_slide.get('percent_necrosis') is not none else '—' }}{% if first_slide.get('percent_necrosis') is not none %}%{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <p class="muted tiny">01A/01Z identifica códigos de muestra/vial; no demuestra por sí solo si corresponde a segunda lesión o recurrencia. Se requiere vínculo explícito del GDC o revisión patológica.</p>
+        {% else %}<p class="muted small">Sin jerarquía de muestras en el reporte complementario.</p>{% endif %}
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Antecedentes familiares</div>
+          {% if case_report.get('clinical', {}).get('family_histories') %}
+          <table><thead><tr><th>Parentesco</th><th>Diagnóstico</th><th>Edad</th><th>Antecedente</th></tr></thead>
+            <tbody>{% for h in case_report.get('clinical', {}).get('family_histories', []) %}<tr><td>{{ h.get('relationship_type') or '—' }}</td><td>{{ h.get('relationship_primary_diagnosis') or '—' }}</td><td>{{ h.get('relationship_age_at_diagnosis') if h.get('relationship_age_at_diagnosis') is not none else '—' }}</td><td>{{ h.get('relative_with_cancer_history') or '—' }}</td></tr>{% endfor %}</tbody>
+          </table>
+          {% else %}<p class="muted small">Sin antecedentes familiares registrados.</p>{% endif %}
+        </div>
+        <div class="card">
+          <div class="card-title">Seguimientos GDC</div>
+          {% if case_report.get('clinical', {}).get('follow_ups') %}
+          <table><thead><tr><th>Día</th><th>Respuesta</th><th>Progresión / recurrencia</th><th>Evento</th></tr></thead>
+            <tbody>{% for f in case_report.get('clinical', {}).get('follow_ups', []) %}<tr><td>{{ f.get('days_to_follow_up') if f.get('days_to_follow_up') is not none else '—' }}</td><td>{{ f.get('disease_response') or '—' }}</td><td>{{ f.get('progression_or_recurrence') or '—' }}{% if f.get('progression_or_recurrence_anatomic_site') %}<div class="tiny muted">{{ f.get('progression_or_recurrence_anatomic_site') }}</div>{% endif %}</td><td>{{ f.get('first_event') or '—' }}</td></tr>{% endfor %}</tbody>
+          </table>
+          {% else %}<p class="muted small">Sin seguimientos registrados en GDC.</p>{% endif %}
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Receptores clínicos · IHQ/FISH</div>
+        <div class="markers-note">La expresión de ARN se muestra por separado y no confirma positividad clínica.</div>
+        <table><thead><tr><th>Receptor</th><th>Resultado clínico</th><th>Fuente / prueba</th><th>Día</th><th>ARN TPM</th></tr></thead>
+          <tbody>
+          {% for receptor in ['ER', 'PR', 'HER2'] %}
+            {% set group = case_report.get('receptors_clinical', {}).get(receptor, {}) %}
+            {% set tests = group.get('molecular_tests', []) + group.get('clinical_supplement', []) %}
+            {% if tests %}
+              {% for r in tests %}<tr><td><strong>{{ receptor }}</strong></td><td>{{ r.get('result') or r.get('value') or r.get('value') or r.get('test_result') or '—' }}</td><td>{{ r.get('method') or r.get('test') or r.get('field') or r.get('source') or '—' }}</td><td>{{ r.get('days_to_test') if r.get('days_to_test') is not none else '—' }}</td><td>{{ case_report.get('receptors_expression', {}).get('values_tpm', {}).get({'ER':'ESR1','PR':'PGR','HER2':'ERBB2'}[receptor]) if case_report.get('receptors_expression', {}).get('values_tpm', {}).get({'ER':'ESR1','PR':'PGR','HER2':'ERBB2'}[receptor]) is not none else '—' }}</td></tr>{% endfor %}
+            {% else %}<tr><td><strong>{{ receptor }}</strong></td><td colspan="3" class="muted">Sin resultado IHQ/FISH disponible</td><td>{{ case_report.get('receptors_expression', {}).get('values_tpm', {}).get({'ER':'ESR1','PR':'PGR','HER2':'ERBB2'}[receptor]) if case_report.get('receptors_expression', {}).get('values_tpm', {}).get({'ER':'ESR1','PR':'PGR','HER2':'ERBB2'}[receptor]) is not none else '—' }}</td></tr>{% endif %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Mutaciones somáticas · genes driver ({{ case_report.get('mutations', [])|length }})</div>
+        {% if case_report.get('mutations') %}
+        <table><thead><tr><th>Gen</th><th>Cambio ADN</th><th>Clase</th><th>Cambio AA</th><th>Consecuencia</th><th>Fuente</th></tr></thead>
+          <tbody>{% for m in case_report.get('mutations', [])[:100] %}<tr><td>{{ m.get('gene') }}</td><td class="mono">{{ m.get('dna_change') or '—' }}</td><td>{{ m.get('subtype') or m.get('variant_type') or '—' }}</td><td>{{ m.get('aa_change') or '—' }}</td><td>{{ m.get('consequence') or '—' }}</td><td class="tiny">{{ m.get('source') or '—' }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% if case_report.get('mutations')|length > 100 %}<p class="muted tiny">Se muestran 100 de {{ case_report.get('mutations')|length }} variantes driver.</p>{% endif %}
+        {% else %}<p class="muted small">Sin mutaciones driver disponibles en fuentes abiertas.</p>{% endif %}
+      </div>
+
+      <div class="section">
+        <div class="section-title">Número de copias · genes driver</div>
+        {% if case_report.get('copy_number') %}
+        <table><thead><tr><th>Gen</th><th>Región</th><th>Número de copias</th><th>Rango</th></tr></thead>
+          <tbody>{% for c in case_report.get('copy_number', []) %}<tr><td>{{ c.get('gene_name') or c.get('gene') or '—' }}</td><td>{{ c.get('chromosome') or '—' }}:{{ c.get('start') or '—' }}–{{ c.get('end') or '—' }}</td><td>{{ c.get('copy_number') or '—' }}</td><td>{{ c.get('min_copy_number') or '—' }}–{{ c.get('max_copy_number') or '—' }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<p class="muted small">Sin archivo abierto de número de copias.</p>{% endif %}
+      </div>
+
+      <div class="section page-break-before">
+        <div class="section-title">Expresión ampliada · PAM50 y genes adicionales</div>
+        {% if case_report.get('expression_panel') %}
+        <table><thead><tr><th>Gen</th><th class="num">TPM</th><th class="num">log2(TPM+1)</th><th class="num">FPKM</th><th class="num">Counts</th><th>Calidad</th></tr></thead>
+          <tbody>{% for e in case_report.get('expression_panel', []) %}<tr><td><strong>{{ e.get('gene') }}</strong></td><td class="num">{{ '%.2f'|format(e.get('tpm')) if e.get('tpm') is not none else '—' }}</td><td class="num">{{ '%.4f'|format(e.get('log2_tpm_plus_1')) if e.get('log2_tpm_plus_1') is not none else '—' }}</td><td class="num">{{ '%.4f'|format(e.get('fpkm')) if e.get('fpkm') is not none else '—' }}</td><td class="num">{{ e.get('counts') if e.get('counts') is not none else '—' }}</td><td>{{ e.get('flags')|join(', ') if e.get('flags') else ('Informativo' if e.get('informative') else '—') }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<p class="muted small">Sin archivo STAR - Counts abierto para expresión.</p>{% endif %}
+      </div>
+
+      <div class="section">
+        <div class="section-title">Percentiles de expresión · prioridad hispana/latina</div>
+        {% for key, label in [('percentiles_all_brca','TCGA-BRCA'), ('percentiles_lobular','Lobulillares 8520/3'), ('percentiles_hispanic','Hispanos/latinos'), ('percentiles_lobular_hispanic','Lobulillares hispanos/latinos')] %}
+          {% set values = case_report.get(key, {}) %}
+          <div class="card"><div class="card-title">{{ label }}</div>
+          {% if values %}<table><thead><tr><th>Gen</th><th class="num">TPM</th><th class="num">Percentil</th><th>Nivel</th><th class="num">N cohorte</th></tr></thead>
+            <tbody>{% for gene, p in values.items() %}<tr><td>{{ gene }}</td><td class="num">{{ p.get('tpm') }}</td><td class="num">p{{ p.get('percentil') }}</td><td>{{ p.get('nivel') }}</td><td class="num">{{ p.get('n_cohorte') }}</td></tr>{% endfor %}</tbody>
+          </table>{% else %}<p class="muted small">No calculado o sin muestra suficiente.</p>{% endif %}</div>
+        {% endfor %}
+      </div>
+
+      <div class="section">
+        <div class="section-title">Cronología relativa</div>
+        {% if case_report.get('timeline') %}
+        <table><thead><tr><th>Día relativo</th><th>Tipo</th><th>Evento</th><th>Estado / respuesta</th></tr></thead>
+          <tbody>{% for event in case_report.get('timeline', []) %}<tr><td>{{ event.get('day') if event.get('day') is not none else '—' }}{% if event.get('end_day') is not none %}–{{ event.get('end_day') }}{% endif %}</td><td>{{ event.get('kind') }}</td><td>{{ event.get('label') }}</td><td>{{ event.get('status') or event.get('outcome') or event.get('administered') or '—' }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<p class="muted small">Sin eventos temporales disponibles.</p>{% endif %}
+      </div>
+
+      <div class="section">
+        <div class="section-title">Diagnósticos por confirmar</div>
+        {% for item in case_report.get('diagnosis_interpretation', []) %}
+        <p class="small"><strong>{{ item.get('primary_diagnosis') or 'Diagnóstico' }}</strong> · {{ item.get('laterality') or 'lateralidad sin dato' }} · {{ item.get('classification') }}. {{ item.get('lesion_sample_link') }}</p>
+        {% endfor %}
+      </div>
+
+      <div class="section">
+        <div class="section-title">Inventario y enlaces GDC</div>
+        {% if case_report.get('files_inventory', {}).get('by_data_type') %}
+        <table><thead><tr><th>Tipo</th><th class="num">Archivos</th></tr></thead><tbody>
+          {% for kind, count in case_report.get('files_inventory', {}).get('by_data_type', {}).items() %}<tr><td>{{ kind }}</td><td class="num">{{ count }}</td></tr>{% endfor %}
+        </tbody></table>
+        {% endif %}
+        {% for url in case_report.get('file_links', {}).get('pathology_reports', []) %}<p><a href="{{ url }}">Abrir reporte de patología en GDC Portal</a></p>{% endfor %}
+        {% for url in case_report.get('file_links', {}).get('slide_images', []) %}<p><a href="{{ url }}">Abrir lámina diagnóstica en GDC Portal</a></p>{% endfor %}
+        <p class="muted tiny">Los archivos con acceso controlado solo se listan; este reporte no los descarga.</p>
+      </div>
+
+      {% if case_report.get('annotations') %}
+      <div class="section">
+        <div class="section-title">Anotaciones de calidad ({{ case_report.get('annotations')|length }})</div>
+        <table><thead><tr><th>Categoría</th><th>Clasificación</th><th>Estado</th><th>Notas</th></tr></thead>
+          <tbody>{% for a in case_report.get('annotations', []) %}<tr><td>{{ a.get('category') or '—' }}</td><td>{{ a.get('classification') or '—' }}</td><td>{{ a.get('status') or '—' }}</td><td>{{ a.get('notes') or '—' }}</td></tr>{% endfor %}</tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      {% if case_report.get('curated') %}
+      <div class="section">
+        <div class="section-title">Tablas curadas locales</div>
+        {% for name, value in case_report.get('curated', {}).items() %}
+        <div class="card"><div class="card-title">{{ name }}</div>
+          {% if value %}<pre class="curated-data">{{ value|tojson(indent=2) }}</pre>{% else %}<p class="muted small">No suministrada o sin fila para este caso.</p>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if case_report.get('warnings') %}
+      <div class="section">
+        <div class="section-title">Capas faltantes o advertencias</div>
+        <ul class="tight">{% for warning in case_report.get('warnings', []) %}<li>{{ warning }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="section page-break-before">
+      <div class="section-title">Reporte complementario GDC</div>
+      <p class="muted small">Aún no se ha generado el reporte ampliado. Prioriza casos hispanos/latinos al resolver un submitter_id ambiguo. Ejecuta <code>tcga case-report {{ case.submitter_id or case.case_id }}</code>; para percentiles añade <code>--percentiles</code>.</p>
+    </div>
+    {% endif %}
+
   </div>{# fin pdf-body #}
 
   {# ---- Pie de página ---- #}

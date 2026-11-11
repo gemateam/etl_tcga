@@ -1,15 +1,15 @@
-{# Mini tabla interactiva: top genes por TPM de un archivo de expresión #}
+{# Tabla paginada con todos los genes de un archivo de expresión #}
 <div class="expr-table-wrap">
   <div class="expr-table-controls">
-    <strong class="small">Top genes por TPM</strong>
-    <span class="muted small"> — {{ rows|length }} genes mostrados</span>
+    <strong class="small">Expresión por gen</strong>
+    <span class="muted small"> — {{ offset + 1 if total else 0 }}–{{ offset + rows|length }} de {{ total }} genes</span>
     <div class="expr-filters">
       <label class="small muted">Tipo:
         <select
           hx-get="/casos/{{ case_id }}/expresion/tabla"
           hx-target="#expr-table-panel"
           hx-swap="innerHTML"
-          hx-include="[name='limit_sel']"
+          hx-include="[name='file_id'],[name='limit']"
           name="gene_type"
           onchange="this.form && this.form.requestSubmit()">
           <option value="">Todos</option>
@@ -19,8 +19,8 @@
         </select>
         <input type="hidden" name="file_id" value="{{ file_id }}">
       </label>
-      <label class="small muted">Mostrar:
-        <select name="limit_sel"
+      <label class="small muted">Filas:
+        <select name="limit"
           hx-get="/casos/{{ case_id }}/expresion/tabla"
           hx-target="#expr-table-panel"
           hx-swap="innerHTML"
@@ -29,7 +29,7 @@
           <option value="{{ n }}" {{ 'selected' if limit == n else '' }}>{{ n }}</option>
           {% endfor %}
         </select>
-        genes
+        por página
       </label>
     </div>
   </div>
@@ -44,6 +44,7 @@
         <th>Tipo</th>
         <th class="num">TPM</th>
         <th class="num">FPKM</th>
+        <th class="num">FPKM-UQ</th>
         <th class="num">Counts</th>
         <th>Expresión (TPM)</th>
         <th></th>
@@ -55,12 +56,13 @@
     {% set tpm = r.tpm_unstranded or 0 %}
     {% set bar_pct = (tpm / max_tpm * 100) | round(1) if max_tpm > 0 else 0 %}
     <tr>
-      <td class="muted small">{{ loop.index }}</td>
+      <td class="muted small">{{ offset + loop.index }}</td>
       <td><strong class="mono small">{{ r.gene_name or r.gene_id }}</strong>
           <div class="muted tiny">{{ r.gene_id }}</div></td>
       <td><span class="tag">{{ r.gene_type or '—' }}</span></td>
       <td class="num">{{ '%.2f'|format(tpm) }}</td>
       <td class="num muted">{{ '%.4f'|format(r.fpkm_unstranded or 0) }}</td>
+      <td class="num muted">{{ '%.4f'|format(r.fpkm_uq_unstranded or 0) }}</td>
       <td class="num muted">{{ r.unstranded | int if r.unstranded is not none else '—' }}</td>
       <td class="bar-cell">
         <div class="inline-bar">
@@ -75,6 +77,16 @@
     </tbody>
   </table>
   </div>
+  {% if total %}
+  <nav class="pagination" aria-label="Paginación de expresión génica">
+    {% if offset > 0 %}
+    <button class="btn ghost small" hx-get="/casos/{{ case_id }}/expresion/tabla?file_id={{ file_id }}&gene_type={{ gene_type }}&limit={{ limit }}&offset={{ [offset - limit, 0]|max }}" hx-target="#expr-table-panel" hx-swap="innerHTML">← Anterior</button>
+    {% endif %}
+    {% if offset + rows|length < total %}
+    <button class="btn ghost small" hx-get="/casos/{{ case_id }}/expresion/tabla?file_id={{ file_id }}&gene_type={{ gene_type }}&limit={{ limit }}&offset={{ offset + limit }}" hx-target="#expr-table-panel" hx-swap="innerHTML">Siguiente →</button>
+    {% endif %}
+  </nav>
+  {% endif %}
   {% else %}
   <p class="muted">Sin datos para este filtro.</p>
   {% endif %}

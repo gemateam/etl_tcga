@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import shutil
-from typing import Any
 
 from ..config import Settings, get_settings
 from ..db import connect, copy_rows

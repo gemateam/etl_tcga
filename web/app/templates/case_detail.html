@@ -1,4 +1,21 @@
 {% extends "base.html" %}
+{% macro treatment_item(t) %}
+<li class="treatment-item">
+  <strong>{{ t.get('treatment_type') or 'Tipo de tratamiento no especificado' }}</strong>
+  {% if t.get('therapeutic_agents') %}<div class="treatment-agents">{{ t.get('therapeutic_agents') }}</div>{% endif %}
+  <div class="treatment-meta">
+    {% if t.get('treatment_or_therapy') == 'yes' %}<span>Administrado: sí</span>
+    {% elif t.get('treatment_or_therapy') == 'no' %}<span>Administrado: no</span>
+    {% elif t.get('treatment_or_therapy') %}<span>Estado: {{ t.get('treatment_or_therapy') }}</span>{% endif %}
+    {% if t.get('days_to_treatment_start') is not none %}<span>Inicio: día {{ t.get('days_to_treatment_start') }}</span>{% endif %}
+  </div>
+  {% for field, value in t.items() %}
+    {% if field not in ['treatment_id', 'treatment_type', 'therapeutic_agents', 'treatment_or_therapy', 'days_to_treatment_start'] and value is not none and value != '' %}
+    <div class="treatment-extra">{{ field|replace('_', ' ')|title }}: {{ value|join(', ') if value is sequence and value is not string else value }}</div>
+    {% endif %}
+  {% endfor %}
+</li>
+{% endmacro %}
 {% block title %}{{ case.submitter_id or case.case_id }} · TCGA Medallion{% endblock %}
 {% block content %}
 <section class="page-head">
@@ -13,8 +30,26 @@
   </div>
 </section>
 
-<div class="grid cards-2">
-  <section class="card">
+<nav class="case-jump-links" aria-label="Secciones del caso">
+  <a href="#diagnoses-section">Diagnósticos</a>
+  <a href="#gdc-report-section">Reporte ampliado</a>
+  <a href="#exposures-section">Exposiciones</a>
+  <a href="#mutations-section">ADN · {{ mutation_count }} variantes</a>
+  <a href="#samples-section">Muestras</a>
+  <a href="#files-section">Archivos</a>
+  <a href="#expr-section">ARN · expresión</a>
+</nav>
+
+{% if case_report %}
+  {% include "partials/case_report_detail.html" %}
+{% else %}
+<section class="card" id="gdc-report-section">
+  <h2>Reporte ampliado GDC</h2>
+  <p class="muted">Aún no se ha generado el reporte complementario para este caso.</p>
+</section>
+{% endif %}
+
+<section class="card" id="diagnoses-section">
     <h2>Demografía</h2>
     <dl class="kv">
       <dt>Sexo</dt><dd>{{ case.sex_at_birth or '—' }}</dd>
@@ -22,9 +57,15 @@
       <dt>Etnicidad</dt><dd>{{ case.ethnicity or '—' }}</dd>
       <dt>Estado vital</dt><dd>{{ case.vital_status or '—' }}</dd>
       <dt>Edad al índice</dt><dd>{{ case.age_at_index if case.age_at_index is not none else '—' }}</dd>
+      <dt>Días desde nacimiento</dt><dd>{{ case.days_to_birth if case.days_to_birth is not none else '—' }}</dd>
+      <dt>Año de nacimiento</dt><dd>{{ case.year_of_birth or '—' }}</dd>
+      <dt>Año de fallecimiento</dt><dd>{{ case.year_of_death or '—' }}</dd>
       <dt>Días a la muerte</dt><dd>{{ case.days_to_death if case.days_to_death is not none else '—' }}</dd>
       <dt>Causa de muerte</dt><dd>{{ case.cause_of_death or '—' }}</dd>
       <dt>Estado marital</dt><dd>{{ case.marital_status or '—' }}</dd>
+      <dt>Educación</dt><dd>{{ case.education_level or '—' }}</dd>
+      <dt>País de residencia</dt><dd>{{ case.country_of_residence_at_enrollment or '—' }}</dd>
+      <dt>Estado / región</dt><dd>{{ case.state or '—' }}</dd>
     </dl>
   </section>
   <section class="card">
@@ -38,6 +79,7 @@
       <dt>Exposiciones</dt><dd>{{ exposures|length }}</dd>
       <dt>Muestras</dt><dd>{{ samples|length }}</dd>
       <dt>Archivos</dt><dd>{{ files|length }}</dd>
+      <dt>Mutaciones somáticas</dt><dd>{{ mutation_count }}</dd>
     </dl>
   </section>
 </div>
@@ -53,6 +95,7 @@
   </div>
   {% endif %}
   {% if diagnoses %}
+  <div class="table-scroll">
   <table class="table">
     <thead><tr>
       <th>Diagnóstico</th><th>Estadio</th><th>Morfología</th>
@@ -73,7 +116,10 @@
             <span class="dx-badge dx-badge-secondary" title="{{ d.classification_of_tumor }}">{{ d.classification_of_tumor }}</span>
           {% endif %}
         </td>
-        <td>{{ d.ajcc_pathologic_stage or '—' }}</td>
+        <td>{{ d.ajcc_pathologic_stage or '—' }}
+          <div class="muted small">T {{ d.ajcc_pathologic_t or '—' }} · N {{ d.ajcc_pathologic_n or '—' }} · M {{ d.ajcc_pathologic_m or '—' }}</div>
+          {% if d.ajcc_clinical_stage %}<div class="muted small">Clínico: {{ d.ajcc_clinical_stage }}</div>{% endif %}
+        </td>
         <td>{{ d.morphology or '—' }}
           {% if d.morphology and '/' in d.morphology %}
           {% set parts = d.morphology.split('/') %}
@@ -89,71 +135,125 @@
           </div>
           {% endif %}
         </td>
-        <td>{{ d.laterality or '—' }}</td>
+        <td>{{ d.laterality or '—' }}
+          {% if d.tumor_grade %}<div class="muted small">Grado: {{ d.tumor_grade }}</div>{% endif %}
+        </td>
         <td class="num">{{ d.age_at_diagnosis | days_to_years }}</td>
         <td>
           {% if d.treatments %}
-            <ul class="tight">
+            <ul class="treatment-list">
             {% for t in d.treatments %}
-              <li>{{ t.get('therapeutic_agents') or t.get('treatment_type') or 'Sin agente' }}
-                {% if t.get('treatment_or_therapy') %}<span class="muted">({{ t.get('treatment_or_therapy') }})</span>{% endif %}
-              </li>
+              {{ treatment_item(t) }}
             {% endfor %}
             </ul>
           {% else %}—{% endif %}
         </td>
       </tr>
+      <tr>
+        <td colspan="6">
+          <details class="record-details">
+            <summary class="small">Ver todos los campos del diagnóstico</summary>
+            <dl class="kv mt-1">
+            {% for field, value in d.items() %}
+              {% if value is not none and value != '' %}
+                {% if field == 'treatments' %}
+                <dt>Tratamientos</dt>
+                <dd><ul class="treatment-list">
+                  {% for t in value %}{{ treatment_item(t) }}{% endfor %}
+                </ul></dd>
+                {% else %}
+                <dt>{{ field|replace('_', ' ')|title }}</dt><dd>{{ value }}</dd>
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            </dl>
+          </details>
+        </td>
+      </tr>
     {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}<p class="muted">Sin diagnósticos registrados.</p>{% endif %}
 </section>
 
-<section class="card">
+<section class="card" id="exposures-section">
   <h2>Exposiciones</h2>
   {% if exposures %}
+  <div class="table-scroll">
   <table class="table">
-    <thead><tr><th>Alcohol</th><th>Intensidad</th><th>Cigarrillos/día</th><th>Paquetes-año</th><th>Tabaquismo</th></tr></thead>
+    <thead><tr><th>Exposición</th><th>Alcohol</th><th>Intensidad</th><th>Cigarrillos/día</th><th>Paquetes-año</th><th>Tabaquismo</th><th>Detalles</th></tr></thead>
     <tbody>
     {% for e in exposures %}
       <tr>
+        <td>{{ e.submitter_id or e.exposure_id }}</td>
         <td>{{ e.alcohol_history or '—' }}</td>
         <td>{{ e.alcohol_intensity or '—' }}</td>
         <td class="num">{{ e.cigarettes_per_day | fmt }}</td>
         <td class="num">{{ e.pack_years_smoked | fmt }}</td>
         <td>{{ e.tobacco_smoking_status or '—' }}</td>
+        <td><details class="record-details"><summary>Ver todos</summary><dl class="kv mt-1">
+          {% for field, value in e.items() %}
+            {% if value is not none and value != '' %}<dt>{{ field|replace('_', ' ')|title }}</dt><dd>{{ value }}</dd>{% endif %}
+          {% endfor %}
+        </dl></details></td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}<p class="muted">Sin exposiciones registradas.</p>{% endif %}
 </section>
 
+<section class="card" id="mutations-section">
+  <h2><span class="molecule-label molecule-dna">ADN</span> Variantes somáticas ({{ mutation_count }})</h2>
+  <p class="muted small molecule-description">Ácido desoxirribonucleico · variantes somáticas reportadas en archivos MAF.</p>
+  <div id="case-mutations-panel"
+       hx-get="/casos/{{ case.case_id }}/mutaciones?page=1"
+       hx-trigger="load"
+       hx-swap="innerHTML">
+    <p class="muted small">Cargando mutaciones…</p>
+  </div>
+</section>
+
 <div class="grid cards-2">
-  <section class="card">
+  <section class="card" id="samples-section">
     <h2>Muestras</h2>
     {% if samples %}
+    <div class="table-scroll">
     <table class="table compact">
-      <thead><tr><th>Muestra</th><th>Tipo</th><th>Tejido</th></tr></thead>
+      <thead><tr><th>Muestra</th><th>Tipo</th><th>Tejido</th><th>Detalles</th></tr></thead>
       <tbody>
       {% for s in samples %}
-        <tr><td>{{ s.submitter_id or s.sample_id }}</td><td>{{ s.sample_type or '—' }}</td><td>{{ s.tissue_type or '—' }}</td></tr>
+        <tr><td>{{ s.submitter_id or s.sample_id }}</td><td>{{ s.sample_type or '—' }}</td><td>{{ s.tissue_type or '—' }}</td><td><details class="record-details"><summary>Ver todos</summary><dl class="kv mt-1">
+          {% for field, value in s.items() %}
+            {% if value is not none and value != '' %}<dt>{{ field|replace('_', ' ')|title }}</dt><dd>{{ value }}</dd>{% endif %}
+          {% endfor %}
+        </dl></details></td></tr>
       {% endfor %}
       </tbody>
     </table>
+    </div>
     {% else %}<p class="muted">Sin muestras.</p>{% endif %}
   </section>
-  <section class="card">
+  <section class="card" id="files-section">
     <h2>Archivos</h2>
     {% if files %}
+    <div class="table-scroll">
     <table class="table compact">
-      <thead><tr><th>Archivo</th><th>Tipo</th><th class="num">Tamaño</th><th></th></tr></thead>
+      <thead><tr><th>Archivo</th><th>Tipo</th><th class="num">Tamaño</th><th>Workflow</th><th>Detalles</th><th></th></tr></thead>
       <tbody>
       {% for f in files %}
         <tr>
-          <td class="mono small">{{ f.file_name }}</td>
+          <td class="mono small file-name-cell">{{ f.file_name }}</td>
           <td>{{ f.data_type }}</td>
           <td class="num">{{ ((f.file_size or 0) / 1048576) | round(1) }} MB</td>
+          <td>{{ f.workflow_type or f.experimental_strategy or '—' }}</td>
+          <td><details class="record-details"><summary>Ver todos</summary><dl class="kv mt-1">
+            {% for field, value in f.items() %}
+              {% if value is not none and value != '' %}<dt>{{ field|replace('_', ' ')|title }}</dt><dd>{{ value }}</dd>{% endif %}
+            {% endfor %}
+          </dl></details></td>
           <td>
             {% if f.data_type == 'Gene Expression Quantification' %}
             <button class="btn ghost small"
@@ -170,15 +270,17 @@
       {% endfor %}
       </tbody>
     </table>
+    </div>
     {% else %}<p class="muted">Sin archivos asociados.</p>{% endif %}
   </section>
 </div>
 
 {# ---------------------------------------------------------------- expresión génica #}
 <section class="card" id="expr-section">
-  <h2>Expresión génica
+  <h2><span class="molecule-label molecule-rna">ARN</span> Expresión génica
     <span id="expr-spinner" class="htmx-indicator muted small"> cargando…</span>
   </h2>
+  <p class="muted small molecule-description">Ácido ribonucleico · cuantificación por gen en TPM, FPKM, FPKM-UQ y counts.</p>
 
   {# -- Panel de marcadores clínicos -- #}
   <div id="markers-panel"
@@ -191,4 +293,5 @@
   {# -- Mini tabla interactiva (se carga al pulsar "Ver genes") -- #}
   <div id="expr-table-panel" class="mt-2"></div>
 </section>
+
 {% endblock %}

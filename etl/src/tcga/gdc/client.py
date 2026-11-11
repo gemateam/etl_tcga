@@ -81,19 +81,53 @@ class GDCClient:
         raise GDCError(f"No se pudo completar {path} tras {self.settings.http_retries} intentos: {last}")
 
     def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        return self.post_json(path, body)
+
+    def get_json(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        resp = self._request("GET", path, params=params)
+        try:
+            return resp.json()
+        finally:
+            resp.close()
+
+    def post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         resp = self._request("POST", path, json=body)
         try:
             return resp.json()
         finally:
             resp.close()
 
+    def search_pages(
+        self,
+        endpoint: str,
+        payload: dict[str, Any],
+        page_size: int = 500,
+        max_records: int | None = None,
+    ) -> Iterator[tuple[int, dict[str, Any]]]:
+        """Pagina búsquedas POST del GDC conservando filtros y campos."""
+        if page_size < 1:
+            raise ValueError("page_size debe ser positivo")
+        offset = 0
+        page = 1
+        total: int | None = None
+        while max_records is None or offset < max_records:
+            size = page_size if max_records is None else min(page_size, max_records - offset)
+            body = {**payload, "size": size, "from": offset}
+            response = self.post_json(endpoint, body)
+            data = response.get("data", {})
+            hits = data.get("hits", [])
+            if not hits:
+                break
+            yield page, response
+            offset += len(hits)
+            total = data.get("pagination", {}).get("total", total)
+            if (total is not None and offset >= total) or len(hits) < size:
+                break
+            page += 1
+
     # ----------------------------------------------------------------- API
     def status(self) -> dict[str, Any]:
-        resp = self._request("GET", "status")
-        try:
-            return resp.json()
-        finally:
-            resp.close()
+        return self.get_json("status")
 
     def case_pages(self, project: str, page_size: int = 1000) -> Iterator[tuple[int, dict[str, Any]]]:
         """Pagina /cases con from/size hasta agotar el total informado.

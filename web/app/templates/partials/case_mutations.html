@@ -1,0 +1,40 @@
+{% if mutations %}
+<p class="muted small">Mostrando {{ (page - 1) * page_size + 1 }}–{{ (page - 1) * page_size + mutations|length }} de {{ total }} variantes somáticas tras el control de calidad.</p>
+<div class="table-scroll">
+  <table class="table compact">
+    <thead><tr>
+      <th>Gen</th><th>Clasificación</th><th>Variante</th><th>Posición</th>
+      <th>Cambio proteico</th><th>Muestra tumoral</th><th>Calidad</th><th>Registro</th>
+    </tr></thead>
+    <tbody>
+    {% for m in mutations %}
+      <tr>
+        <td><strong>{{ m.hugo_symbol or '—' }}</strong><div class="muted tiny">{{ m.entrez_gene_id or '' }}</div></td>
+        <td>{{ m.variant_classification or '—' }}<div class="muted tiny">{{ m.variant_type or '' }}</div></td>
+        <td class="mono small">{{ m.reference_allele or '—' }} → {{ m.tumor_seq_allele2 or '—' }}</td>
+        <td>{{ m.chromosome or '—' }}:{{ m.start_position or '—' }}–{{ m.end_position or '—' }}</td>
+        <td>{{ m.hgvsp_short or m.hgvsc or '—' }}</td>
+        <td class="mono small">{{ m.tumor_sample_barcode or '—' }}</td>
+        <td>{{ m.filter_status or '—' }}</td>
+        <td><details class="record-details"><summary>Ver todos</summary><dl class="kv mt-1">
+          {% for field, value in m.items() %}
+            {% if value is not none and value != '' %}<dt>{{ field|replace('_', ' ')|title }}</dt><dd>{{ value }}</dd>{% endif %}
+          {% endfor %}
+        </dl></details></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<nav class="pagination" aria-label="Paginación de mutaciones">
+  {% if page > 1 %}
+  <button class="btn ghost small" hx-get="/casos/{{ case_id }}/mutaciones?page={{ page - 1 }}" hx-target="#case-mutations-panel" hx-swap="innerHTML">← Anterior</button>
+  {% endif %}
+  <span class="muted small">Página {{ page }} de {{ page_count }}</span>
+  {% if page < page_count %}
+  <button class="btn ghost small" hx-get="/casos/{{ case_id }}/mutaciones?page={{ page + 1 }}" hx-target="#case-mutations-panel" hx-swap="innerHTML">Siguiente →</button>
+  {% endif %}
+</nav>
+{% else %}
+<p class="muted">Sin mutaciones somáticas cargadas para este caso.</p>
+{% endif %}

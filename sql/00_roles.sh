@@ -22,8 +22,9 @@ EOSQL
 
 # El DDL se aplica como etl_rw para que sea el dueño de las tablas y
 # las default privileges de web_ro apliquen a las tablas futuras.
+SQL_FILE="${SQL_DIR:-/sql}/001_schema.sql"
 psql -v ON_ERROR_STOP=1 \
      --username "$POSTGRES_USER" \
      --dbname "$POSTGRES_DB" \
      -c "SET ROLE etl_rw" \
-     -f /docker-entrypoint-initdb.d/001_schema.sql
+     -f "$SQL_FILE"

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import typer
 from psycopg.errors import UndefinedTable
 
@@ -105,58 +104,43 @@ def cmd_bronze_files(
 
 
 @app.command("bronze-expressions")
-def cmd_bronze_expressions(
-    project: list[str] = typer.Option([], "--project", "-p"),
-) -> None:
+def cmd_bronze_expressions(project: list[str] = typer.Option([], "--project", "-p")) -> None:
     """E05: convierte TSV de expresión a Parquet con DuckDB."""
     typer.echo(f"Bronze expresiones: {bronze_expressions(_projects(project))}")
 
 
 @app.command("silver-case-expressions")
-def cmd_silver_expressions(
-    project: list[str] = typer.Option([], "--project", "-p"),
-) -> None:
+def cmd_silver_expressions(project: list[str] = typer.Option([], "--project", "-p")) -> None:
     """S01: expresión narrow con case_id y muestra."""
     typer.echo(f"Silver expresiones: {silver_case_expressions(_projects(project))}")
 
 
 @app.command("extract-maf-manifest")
-def cmd_extract_maf(
-    project: list[str] = typer.Option([], "--project", "-p", help="Proyecto TCGA, repetible."),
-) -> None:
+def cmd_extract_maf(project: list[str] = typer.Option([], "--project", "-p")) -> None:
     """L03: descarga el manifiesto de archivos MAF (mutaciones somáticas)."""
-    result = extract_maf_manifest(_projects(project))
-    typer.echo(f"Archivos MAF: {result}")
+    typer.echo(f"Archivos MAF: {extract_maf_manifest(_projects(project))}")
 
 
 @app.command("bronze-mutations")
-def cmd_bronze_mutations(
-    project: list[str] = typer.Option([], "--project", "-p"),
-) -> None:
+def cmd_bronze_mutations(project: list[str] = typer.Option([], "--project", "-p")) -> None:
     """B03: descarga y parsea MAFs a Parquet + bronze.mutations."""
     typer.echo(f"Bronze mutaciones: {bronze_mutations(_projects(project))}")
 
 
 @app.command("silver-mutations")
-def cmd_silver_mutations(
-    project: list[str] = typer.Option([], "--project", "-p"),
-) -> None:
+def cmd_silver_mutations(project: list[str] = typer.Option([], "--project", "-p")) -> None:
     """S03: mutaciones normalizadas en silver.mutations (solo PASS, deduplicadas)."""
     typer.echo(f"Silver mutaciones: {silver_mutations(_projects(project))}")
 
 
 @app.command("silver-clinical")
-def cmd_silver_clinical(
-    project: list[str] = typer.Option([], "--project", "-p"),
-) -> None:
+def cmd_silver_clinical(project: list[str] = typer.Option([], "--project", "-p")) -> None:
     """S02: tablas clínicas normalizadas."""
     typer.echo(f"Silver clínico: {silver_clinical(_projects(project))}")
 
 
 @app.command("gold-top-diagnosis")
-def cmd_gold_top(
-    project: list[str] = typer.Option([], "--project", "-p"),
-) -> None:
+def cmd_gold_top(project: list[str] = typer.Option([], "--project", "-p")) -> None:
     """G01: top 20 diagnósticos primarios."""
     typer.echo(f"Gold top 20: {gold_top_20_diagnosis(_projects(project))}")
 
@@ -175,9 +159,7 @@ def cmd_gold_pivot(
 
 
 @app.command("gold-extras")
-def cmd_gold_extras(
-    project: list[str] = typer.Option([], "--project", "-p"),
-) -> None:
+def cmd_gold_extras(project: list[str] = typer.Option([], "--project", "-p")) -> None:
     """Tablas gold de apoyo: sample_summary, gene_stats, gene_dim y marcadores."""
     projects = _projects(project)
     typer.echo(f"Sample summary: {sample_summary(projects)}")
@@ -188,14 +170,8 @@ def cmd_gold_extras(
 
 
 def _run_pipeline(
-    projects: list[str],
-    layers: str,
-    limit: int | None,
-    retry_failed: bool,
-    top_genes: int,
-    metric: str,
-    log2: bool,
-    sample_type: str | None,
+    projects: list[str], layers: str, limit: int | None, retry_failed: bool,
+    top_genes: int, metric: str, log2: bool, sample_type: str | None,
 ) -> None:
     selected = [part.strip() for part in layers.split(",") if part.strip()]
     unknown = set(selected) - LAYERS
@@ -207,20 +183,15 @@ def _run_pipeline(
     if "landing" in selected:
         for project in projects:
             extract_cases([project])
-        for project in projects:
             extract_files_manifest([project])
-        for project in projects:
             extract_maf_manifest([project])
         download_expressions(projects, limit=limit, retry_failed=retry_failed)
 
     if "bronze" in selected:
         for project in projects:
             bronze_cases([project])
-        for project in projects:
             bronze_files([project])
-        for project in projects:
             bronze_expressions([project])
-        for project in projects:
             bronze_mutations([project])
 
     if "silver" in selected:
@@ -352,33 +323,149 @@ def cmd_export_gemamx(
         "exports/tcga_brca_hispanic", "--outdir", "-o",
         help="Directorio de destino del bundle del contrato."
     ),
+    data_dir: str = typer.Option(
+        "/data", "--data-dir",
+        help="Raíz del medallón (debe contener bronze/cases y bronze/mutations)."
+    ),
+    project: str = typer.Option("TCGA-BRCA", "--project", "-p"),
+    ethnicity: str = typer.Option(
+        "HISPANIC OR LATINO", "--ethnicity",
+        help="Etnia autorreportada a incluir."
+    ),
+    scope: str = typer.Option(
+        "target_panel", "--scope",
+        help="target_panel (11 genes) o all_missense."
+    ),
+    offline: bool = typer.Option(
+        False, "--offline", help="No consultar /status del GDC."
+    ),
+    allow_curated: bool = typer.Option(
+        False, "--allow-curated",
+        help="Permitir bundles curados (solo smoke tests)."
+    ),
 ) -> None:
-    """Exporta el Contrato de Datos Versionado V3 para GEMAMX (Cáncer de Mama + Hispano/Latino)."""
+    """Exporta el Contrato de Datos V3 (TCGA-BRCA + Hispano/Latino) desde el medallón."""
     from pathlib import Path
-    from .export_contract_v3 import (
-        build_clinical_attributes,
-        export_contract,
-        fetch_gdc_ssms,
-        get_hispanic_cases_from_db,
-        parse_mutations,
-    )
+
+    from .export_contract_v3 import export_bundle
+
     _settings()
-    with connect() as conn:
-        with conn.cursor() as cur:
-            cases = get_hispanic_cases_from_db(cur)
-            if not cases:
-                typer.echo("No se encontraron casos de cáncer de mama hispanos/latinos en BD.")
-                raise typer.Exit(code=1)
-            typer.echo(f"Casos seleccionados (TCGA-BRCA Hispano/Latino): {len(cases)}")
-            case_codes = [c["case_code"] for c in cases]
-            target_set = set(case_codes)
+    result = export_bundle(
+        data_dir=Path(data_dir),
+        outdir=Path(outdir),
+        project=project,
+        ethnicity=ethnicity,
+        scope=scope,
+        offline=offline,
+        require_science=not allow_curated,
+    )
+    manifest = result["manifest"]
+    typer.echo(f"Bundle: {result['path']}")
+    typer.echo(f"  contract_version: {manifest['contract_version']}")
+    typer.echo(f"  gdc_data_release: {manifest['gdc_data_release']}")
+    typer.echo(f"  casos: {manifest['counts']['cohort_cases']}")
+    typer.echo(f"  mutaciones: {manifest['counts']['mutation_records']}")
+    typer.echo(f"  portadoras: {manifest['counts']['mutation_patients']}")
+    typer.echo(f"  clínica: {manifest['counts']['clinical_records']}")
+    if result["errors"]:
+        for error in result["errors"]:
+            typer.echo(f"  ERROR: {error}", err=True)
+        raise typer.Exit(code=1)
+    typer.echo("  validación: OK")
 
-    hits = fetch_gdc_ssms(case_codes)
-    mutations = parse_mutations(hits, target_set)
-    clinical = build_clinical_attributes(cases)
 
-    export_contract(cases, mutations, clinical, Path(outdir))
-    typer.echo(f"Exportación de contrato V3 completada en: {outdir}")
+@app.command("case-report")
+def cmd_case_report(
+    case: str = typer.Argument(..., help="submitter_id (p. ej. TCGA-5L-AAT1) o UUID"),
+    project: str = typer.Option("TCGA-BRCA", "--project", "-p"),
+    legacy_case_id: list[str] = typer.Option([], "--legacy-case-id", help="UUID anterior para redirigir una ruta local al submitter actual; repetible."),
+    outdir: str | None = typer.Option(None, "--out", "-o", help="Directorio de reportes (por defecto DATA_DIR/case_reports)."),
+    percentiles: bool = typer.Option(False, "--percentiles", help="Descargar cohortes para percentiles (incluye BRCA hispana/lobulillar)."),
+    max_cohort_files: int = typer.Option(0, "--max-cohort-files", min=0, help="Límite por cohorte; 0 procesa todos los archivos."),
+    workers: int = typer.Option(4, "--workers", min=1, max=4),
+    cdr: str | None = typer.Option(None, help="Tabla TCGA-CDR local (CSV/TSV/XLSX)."),
+    pam50: str | None = typer.Option(None, help="Tabla PAM50 local (CSV/TSV/XLSX)."),
+    panc: str | None = typer.Option(None, help="Tabla PanCanAtlas local (CSV/TSV/XLSX)."),
+    id_col: str = typer.Option("bcr_patient_barcode", "--id-col"),
+    prioritize_hispanic: bool = typer.Option(True, "--prioritize-hispanic/--no-prioritize-hispanic"),
+    refresh: bool = typer.Option(False, "--refresh", help="Ignora el reporte en caché y vuelve a consultar el caso."),
+) -> None:
+    """Genera un reporte clínico/molecular GDC; prioriza Hispanic or Latino al resolver IDs ambiguos."""
+    from pathlib import Path
+
+    from .case_report import generate_case_report
+
+    settings = _settings()
+    report = generate_case_report(
+        case,
+        settings=settings,
+        out_dir=Path(outdir) if outdir else settings.data_dir / "case_reports",
+        percentiles=percentiles,
+        max_cohort_files=max_cohort_files,
+        workers=workers,
+        cdr=Path(cdr) if cdr else None,
+        pam50=Path(pam50) if pam50 else None,
+        panc=Path(panc) if panc else None,
+        id_col=id_col,
+        prioritize_hispanic=prioritize_hispanic,
+        refresh=refresh,
+        project=project,
+        legacy_case_ids=legacy_case_id,
+    )
+    typer.echo(f"Reporte: {report['report_path']}")
+    typer.echo(f"Caso: {report['identity']['submitter_id']} · etnicidad: {report['identity']['ethnicity'] or 'sin dato'}")
+    typer.echo(f"Prioridad hispana/latina: {'sí' if report['identity']['hispanic_latino_priority'] else 'no'}")
+    typer.echo(f"GDC: {report['metadata']['gdc_data_release'] or 'versión no disponible'}")
+    typer.echo(f"Mutaciones driver: {len(report['mutations'])} · archivos inventariados: {len(report['files_inventory']['files'])}")
+    if report["warnings"]:
+        typer.echo(f"Advertencias/capas no disponibles: {len(report['warnings'])}")
+
+
+@app.command("case-report-batch")
+def cmd_case_report_batch(
+    project: str = typer.Option("TCGA-BRCA", "--project", "-p"),
+    outdir: str | None = typer.Option(None, "--out", "-o", help="Directorio de reportes (por defecto DATA_DIR/case_reports)."),
+    limit: int = typer.Option(0, "--limit", min=0, help="Máximo de casos; 0 procesa toda la cohorte."),
+    percentiles: bool = typer.Option(True, "--percentiles/--no-percentiles", help="Calcular percentiles completos de expresión (activado por defecto)."),
+    max_cohort_files: int = typer.Option(0, "--max-cohort-files", min=0, help="Límite por cohorte para percentiles; 0 procesa todos los archivos."),
+    workers: int = typer.Option(1, "--workers", min=1, max=4),
+    cdr: str | None = typer.Option(None, help="Tabla TCGA-CDR local (CSV/TSV/XLSX)."),
+    pam50: str | None = typer.Option(None, help="Tabla PAM50 local (CSV/TSV/XLSX)."),
+    panc: str | None = typer.Option(None, help="Tabla PanCanAtlas local (CSV/TSV/XLSX)."),
+    id_col: str = typer.Option("bcr_patient_barcode", "--id-col"),
+    refresh: bool = typer.Option(False, "--refresh", help="Ignora reportes en caché y vuelve a consultar los casos."),
+) -> None:
+    """Genera en lote reportes complementarios de casos Hispanic or Latino."""
+    from pathlib import Path
+
+    from .case_report import generate_case_report_batch
+
+    settings = _settings()
+    result = generate_case_report_batch(
+        settings=settings,
+        project=project,
+        out_dir=Path(outdir) if outdir else None,
+        percentiles=percentiles,
+        max_cohort_files=max_cohort_files,
+        workers=workers,
+        max_cases=limit,
+        cdr=Path(cdr) if cdr else None,
+        pam50=Path(pam50) if pam50 else None,
+        panc=Path(panc) if panc else None,
+        id_col=id_col,
+        refresh=refresh,
+    )
+    typer.echo(f"Proyecto: {result['project']}")
+    typer.echo(f"Casos hispanos/latinos encontrados: {result['cases_found']}")
+    typer.echo(f"Reportes procesados: {result['reports_processed']}")
+    typer.echo(f"Directorio: {result['out_dir']}")
+    for failure in result["failures"]:
+        typer.echo(
+            f"ERROR: {failure['submitter_id']} ({failure['error']})",
+            err=True,
+        )
+    if result["failures"]:
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":  # pragma: no cover

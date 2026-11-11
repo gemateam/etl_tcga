@@ -5,7 +5,7 @@ from __future__ import annotations
 from ..config import Settings, get_settings
 from ..db import connect
 from ..logging_utils import get_logger
-from ..ops.runs import pipeline_step, record_dq, recorded_release
+from ..ops.runs import pipeline_step, record_dq
 
 log = get_logger(__name__)
 
@@ -23,7 +23,6 @@ def silver_mutations(
     - Enriquecimiento con case_id desde silver.cases para integridad referencial
     """
     settings = settings or get_settings()
-    release = recorded_release()
     result: dict[str, int] = {}
 
     for project in projects:
@@ -39,7 +38,8 @@ def silver_mutations(
                 result_insert = conn.execute(
                     """
                     INSERT INTO silver.mutations (
-                        mutation_id, file_id, case_id, case_submitter_id, project_id,
+                        mutation_id, file_id, case_id, case_submitter_id,
+                        tumor_sample_barcode, project_id,
                         hugo_symbol, entrez_gene_id, chromosome,
                         start_position, end_position, strand,
                         variant_classification, variant_type,
@@ -51,7 +51,8 @@ def silver_mutations(
                     )
                     SELECT DISTINCT ON (bm.mutation_id)
                         bm.mutation_id, bm.file_id, bm.case_id,
-                        bm.case_submitter_id, bm.project_id,
+                        bm.case_submitter_id, bm.tumor_sample_barcode,
+                        bm.project_id,
                         bm.hugo_symbol, bm.entrez_gene_id, bm.chromosome,
                         bm.start_position, bm.end_position, bm.strand,
                         bm.variant_classification, bm.variant_type,

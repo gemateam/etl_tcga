@@ -5,6 +5,8 @@ description = "Pipeline medallion para datos abiertos del TCGA (GDC)"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "duckdb==1.4.1",
+    "openpyxl==3.1.5",
+    "pandas>=2.2,<3",
     "pyarrow==21.0.0",
     "psycopg[binary]==3.2.10",
     "pytz==2025.2",
