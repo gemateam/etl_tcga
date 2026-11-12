@@ -2,7 +2,7 @@
   "id": "gemamx_v2",
   "name": "GEMAMX v2 · Romero-Córdoba 2021 HM (KNIME Flow)",
   "version": 2,
-  "description": "Pipeline granular estilo KNIME para la cohorte Romero-Córdoba 2021 HM: Lectura y cruce (MOESM8 x MOESM9), Normalización de coordenadas y aminoácidos a 1 letra, Priorización (15 genes, Missense, GroupBy, Math Formula, Rule Engine) y generación de insumos Gold (mutation_stats, top_variants, variant_sequences).",
+  "description": "Pipeline granular estilo KNIME para la cohorte Romero-Córdoba 2021 HM: Lectura y cruce (MOESM8 x MOESM9), Normalización de coordenadas y aminoácidos a 1 letra, Priorización (15 genes, Missense, GroupBy, Math Formula, Rule Engine) y entrega en Gold de top_variants (49 variantes) y mutation_stats.",
   "project_id": null,
   "variables": {
     "dataset": "Romero-Cordoba 2021 HM",
@@ -247,20 +247,6 @@
       "notes": "Insumo Gold 2 · Distribución por gen (top 20) y por tipo de variante (28 114 variantes).",
       "status": "confirmed",
       "description": "Insumo Gold 2: mutation_stats global."
-    },
-    {
-      "id": "variant_sequences",
-      "type": "knime_v2_variant_sequences",
-      "label": "variant_sequences (WT y mutantes .fasta)",
-      "layer": "gold",
-      "position": {
-        "x": 2900.0,
-        "y": 60.0
-      },
-      "params": {},
-      "notes": "Insumo Gold 3 · 54 archivos FASTA (7 WT + 47 MUT) y registro de cuarentena (GATA3 L328H, M294K).",
-      "status": "confirmed",
-      "description": "Insumo Gold 3: variant_sequences para pipeline bioinformático."
     }
   ],
   "edges": [
@@ -327,10 +313,6 @@
     {
       "source": "rule_engine",
       "target": "sorter_top_variants"
-    },
-    {
-      "source": "sorter_top_variants",
-      "target": "variant_sequences"
     }
   ]
 }

@@ -2,7 +2,7 @@
   "id": "gemamx_v1",
   "name": "GEMAMX v1 · TCGA-BRCA cBioPortal",
   "version": 2,
-  "description": "Pipeline medallón para TCGA-BRCA vía API de cBioPortal: ingesta de mutaciones somáticas (60 864 variantes), normalización con cohorte y ensamble GRCh37, y entrega en Gold de mutation_stats, top_variants (Top-20 missense) y variant_sequences (FASTA con cuarentena).",
+  "description": "Pipeline medallón para TCGA-BRCA vía API de cBioPortal: ingesta de mutaciones somáticas (60 864 variantes), normalización de coordenadas y entrega en Gold de mutation_stats y top_variants (Top-20 missense).",
   "project_id": null,
   "variables": {
     "study_id": "brca_tcga",
@@ -40,20 +40,6 @@
       "description": "Mapeo de Entrez IDs a Hugo Symbols."
     },
     {
-      "id": "fetch_fasta",
-      "type": "gemamx_v1_fetch_fasta",
-      "label": "UniProt REST (FASTA crudo)",
-      "layer": "bronze",
-      "position": {
-        "x": 341.6582781456954,
-        "y": 370.882119205298
-      },
-      "params": {},
-      "notes": "Bronce crudo · Secuencias canónicas WT de UniProt para los 15 genes.",
-      "status": "confirmed",
-      "description": "FASTA crudo por gen desde UniProt."
-    },
-    {
       "id": "normalize",
       "type": "gemamx_v1_normalize",
       "label": "mutations (esquema común v1+v2)",
@@ -66,20 +52,6 @@
       "notes": "Plata limpio · Normaliza con cohorte='TCGA-BRCA-cBioPortal' y ensamble='GRCh37'.",
       "status": "confirmed",
       "description": "Tabla silver unificada de mutaciones."
-    },
-    {
-      "id": "wt_sequences",
-      "type": "gemamx_v1_wt_sequences",
-      "label": "protein_wt (15 genes validados)",
-      "layer": "silver",
-      "position": {
-        "x": 667.1099337748344,
-        "y": 287.29006622516556
-      },
-      "params": {},
-      "notes": "Plata limpio · Secuencias WT validadas.",
-      "status": "confirmed",
-      "description": "Secuencias de referencia de aminoácidos."
     },
     {
       "id": "mutation_stats",
@@ -108,20 +80,6 @@
       "notes": "Oro listo para pipelines · Top-20 missense en los 15 genes clave (PIK3CA H1047R rank 1).",
       "status": "confirmed",
       "description": "Insumo Gold 2: ranking de variantes prioritarias."
-    },
-    {
-      "id": "variant_sequences",
-      "type": "gemamx_v1_fasta",
-      "label": "variant_sequences (WT y mutantes .fasta)",
-      "layer": "gold",
-      "position": {
-        "x": 1023.4543046357616,
-        "y": 416.30198675496695
-      },
-      "params": {},
-      "notes": "Oro listo para pipelines · Archivos .fasta WT y mutantes validados con cuarentena.",
-      "status": "confirmed",
-      "description": "Insumo Gold 3: archivos FASTA para el pipeline bioinformático."
     }
   ],
   "edges": [
@@ -130,24 +88,12 @@
       "target": "normalize"
     },
     {
-      "source": "fetch_fasta",
-      "target": "wt_sequences"
-    },
-    {
       "source": "normalize",
       "target": "mutation_stats"
     },
     {
       "source": "normalize",
       "target": "top_variants"
-    },
-    {
-      "source": "top_variants",
-      "target": "variant_sequences"
-    },
-    {
-      "source": "wt_sequences",
-      "target": "variant_sequences"
     }
   ]
 }

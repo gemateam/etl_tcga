@@ -114,6 +114,6 @@ class TestGemamxV1Workflow:
         validate_workflow(wf)
 
         assert wf.id == "gemamx_v1"
-        assert len(wf.nodes) == 8
-        assert len(wf.edges) == 6
+        assert len(wf.nodes) == 5
+        assert len(wf.edges) == 3
 
