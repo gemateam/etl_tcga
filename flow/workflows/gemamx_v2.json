@@ -1,0 +1,336 @@
+{
+  "id": "gemamx_v2",
+  "name": "GEMAMX v2 · Romero-Córdoba 2021 HM (KNIME Flow)",
+  "version": 2,
+  "description": "Pipeline granular estilo KNIME para la cohorte Romero-Córdoba 2021 HM: Lectura y cruce (MOESM8 x MOESM9), Normalización de coordenadas y aminoácidos a 1 letra, Priorización (15 genes, Missense, GroupBy, Math Formula, Rule Engine) y generación de insumos Gold (mutation_stats, top_variants, variant_sequences).",
+  "project_id": null,
+  "variables": {
+    "dataset": "Romero-Cordoba 2021 HM",
+    "cohort_size": 134,
+    "doi": "10.1038/s41467-021-22478-y"
+  },
+  "nodes": [
+    {
+      "id": "moesm8_reader",
+      "type": "knime_v2_moesm8_reader",
+      "label": "Excel Reader (MOESM8 MAF)",
+      "layer": "bronze",
+      "position": {
+        "x": 40.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "1.1 · Lee la hoja 'HM maf' de MOESM8 (28 114 variantes, 134 pacientes).",
+      "status": "confirmed",
+      "description": "Lee el suplementario MOESM8 MAF a Parquet."
+    },
+    {
+      "id": "moesm8_key",
+      "type": "knime_v2_moesm8_key",
+      "label": "String Manip. (clave MAF)",
+      "layer": "bronze",
+      "position": {
+        "x": 260.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "1.2 · Crea clave compuesta gen#chr#pos#ref#alt en el MAF.",
+      "status": "confirmed",
+      "description": "Genera clave compuesta para el join."
+    },
+    {
+      "id": "moesm9_reader",
+      "type": "knime_v2_moesm9_reader",
+      "label": "Excel Reader (MOESM9 drivers)",
+      "layer": "bronze",
+      "position": {
+        "x": 40.0,
+        "y": 180.0
+      },
+      "params": {},
+      "notes": "1.3 · Lee la hoja 'Driver mutation in HM' (127 variantes driver).",
+      "status": "confirmed",
+      "description": "Lee el suplementario MOESM9 a Parquet."
+    },
+    {
+      "id": "moesm9_regex",
+      "type": "knime_v2_moesm9_regex",
+      "label": "Regex Extractor (chr·pos·ref·alt)",
+      "layer": "bronze",
+      "position": {
+        "x": 229.3010188042981,
+        "y": 396.7534126848042
+      },
+      "params": {},
+      "notes": "1.4 · Parsea notación chrN:g.POSref>alt a columnas estructuradas.",
+      "status": "confirmed",
+      "description": "Extrae coordenadas genómicas de la notación gdna."
+    },
+    {
+      "id": "moesm9_key",
+      "type": "knime_v2_moesm9_key",
+      "label": "String Manip. (clave drivers)",
+      "layer": "bronze",
+      "position": {
+        "x": 482.7908164723365,
+        "y": 263.724494170096
+      },
+      "params": {},
+      "notes": "1.5 · Crea clave compuesta gen#chr#pos#ref#alt en drivers.",
+      "status": "confirmed",
+      "description": "Genera clave compuesta de drivers para el join."
+    },
+    {
+      "id": "joiner",
+      "type": "knime_v2_joiner",
+      "label": "Joiner (Left Outer Join)",
+      "layer": "silver",
+      "position": {
+        "x": 480.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "1.6 · Cruza MAF × drivers; 167 mutaciones cruzan con driver status.",
+      "status": "confirmed",
+      "description": "Left Outer Join conservando las 28 114 variantes del MAF."
+    },
+    {
+      "id": "regex_prot",
+      "type": "knime_v2_regex_prot",
+      "label": "Regex Extractor (p.His1047Arg)",
+      "layer": "silver",
+      "position": {
+        "x": 700.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "2.1 · Extrae cambio proteico eliminando prefijo 'p.'.",
+      "status": "confirmed",
+      "description": "Extrae la cadena proteica cruda."
+    },
+    {
+      "id": "cell_replacer",
+      "type": "knime_v2_cell_replacer",
+      "label": "Cell Replacer (3 → 1 letra aa)",
+      "layer": "silver",
+      "position": {
+        "x": 920.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "2.2 · Traduce códigos de 3 letras a letra única estándar (His->H, Arg->R).",
+      "status": "confirmed",
+      "description": "Conversión de nomenclatura de aminoácidos."
+    },
+    {
+      "id": "string_manip_pchange",
+      "type": "knime_v2_string_manip_pchange",
+      "label": "String Manip. (H1047R)",
+      "layer": "silver",
+      "position": {
+        "x": 1140.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "2.3 · Consolida protein_change normalizado y exporta silver unificado (GRCh37).",
+      "status": "confirmed",
+      "description": "Genera la tabla silver normalizada de mutaciones."
+    },
+    {
+      "id": "ref_row_filter",
+      "type": "knime_v2_ref_row_filter",
+      "label": "Ref. Row Filter (15 genes clave)",
+      "layer": "gold",
+      "position": {
+        "x": 1360.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "3.1 · Filtra exclusivamente los 15 genes diana del proyecto (Tier 1-3).",
+      "status": "confirmed",
+      "description": "Filtro de genes clave."
+    },
+    {
+      "id": "row_filter_missense",
+      "type": "knime_v2_row_filter_missense",
+      "label": "Row Filter (solo missense)",
+      "layer": "gold",
+      "position": {
+        "x": 1580.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "3.2 · Retiene solo variantes con Variant_Classification = 'Missense_Mutation'.",
+      "status": "confirmed",
+      "description": "Filtro por tipo de mutación."
+    },
+    {
+      "id": "row_filter_resolved",
+      "type": "knime_v2_row_filter_resolved",
+      "label": "Row Filter (cambio resuelto)",
+      "layer": "gold",
+      "position": {
+        "x": 1800.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "3.3 · Descarta variantes sin protein_change resuelto.",
+      "status": "confirmed",
+      "description": "Filtro de cambio proteico válido."
+    },
+    {
+      "id": "groupby",
+      "type": "knime_v2_groupby",
+      "label": "GroupBy (gen + cambio)",
+      "layer": "gold",
+      "position": {
+        "x": 2020.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "3.4 · Agrupa por gen y variante, contando pacientes únicos.",
+      "status": "confirmed",
+      "description": "Cálculo de frecuencia de variantes."
+    },
+    {
+      "id": "math_formula",
+      "type": "knime_v2_math_formula",
+      "label": "Math Formula (÷ 134 × 100)",
+      "layer": "gold",
+      "position": {
+        "x": 2240.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "3.5 · Porcentaje de la cohorte sobre N=134.",
+      "status": "confirmed",
+      "description": "Cálculo de cohort_percentage."
+    },
+    {
+      "id": "rule_engine",
+      "type": "knime_v2_rule_engine",
+      "label": "Rule Engine (5% · 1% · 0.5%)",
+      "layer": "gold",
+      "position": {
+        "x": 2460.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "3.6 · Clasificación por umbrales: Patogénica, Probable Patogénica, VUS, Baja Frecuencia.",
+      "status": "confirmed",
+      "description": "Motor de reglas clínicas."
+    },
+    {
+      "id": "sorter_top_variants",
+      "type": "knime_v2_sorter",
+      "label": "Sorter → CSV (top_variants · 49)",
+      "layer": "gold",
+      "position": {
+        "x": 2680.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "3.7 · Ordena por freq DESC, asigna rank y persiste top_variants (49 variantes).",
+      "status": "confirmed",
+      "description": "Insumo Gold 1: top_variants ranking."
+    },
+    {
+      "id": "mutation_stats",
+      "type": "knime_v2_mutation_stats",
+      "label": "mutation_stats (distribuciones por gen)",
+      "layer": "gold",
+      "position": {
+        "x": 1360.0,
+        "y": 180.0
+      },
+      "params": {},
+      "notes": "Insumo Gold 2 · Distribución por gen (top 20) y por tipo de variante (28 114 variantes).",
+      "status": "confirmed",
+      "description": "Insumo Gold 2: mutation_stats global."
+    },
+    {
+      "id": "variant_sequences",
+      "type": "knime_v2_variant_sequences",
+      "label": "variant_sequences (WT y mutantes .fasta)",
+      "layer": "gold",
+      "position": {
+        "x": 2900.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "Insumo Gold 3 · 54 archivos FASTA (7 WT + 47 MUT) y registro de cuarentena (GATA3 L328H, M294K).",
+      "status": "confirmed",
+      "description": "Insumo Gold 3: variant_sequences para pipeline bioinformático."
+    }
+  ],
+  "edges": [
+    {
+      "source": "moesm8_reader",
+      "target": "moesm8_key"
+    },
+    {
+      "source": "moesm9_reader",
+      "target": "moesm9_regex"
+    },
+    {
+      "source": "moesm9_regex",
+      "target": "moesm9_key"
+    },
+    {
+      "source": "moesm8_key",
+      "target": "joiner"
+    },
+    {
+      "source": "moesm9_key",
+      "target": "joiner"
+    },
+    {
+      "source": "joiner",
+      "target": "regex_prot"
+    },
+    {
+      "source": "regex_prot",
+      "target": "cell_replacer"
+    },
+    {
+      "source": "cell_replacer",
+      "target": "string_manip_pchange"
+    },
+    {
+      "source": "string_manip_pchange",
+      "target": "ref_row_filter"
+    },
+    {
+      "source": "string_manip_pchange",
+      "target": "mutation_stats"
+    },
+    {
+      "source": "ref_row_filter",
+      "target": "row_filter_missense"
+    },
+    {
+      "source": "row_filter_missense",
+      "target": "row_filter_resolved"
+    },
+    {
+      "source": "row_filter_resolved",
+      "target": "groupby"
+    },
+    {
+      "source": "groupby",
+      "target": "math_formula"
+    },
+    {
+      "source": "math_formula",
+      "target": "rule_engine"
+    },
+    {
+      "source": "rule_engine",
+      "target": "sorter_top_variants"
+    },
+    {
+      "source": "sorter_top_variants",
+      "target": "variant_sequences"
+    }
+  ]
+}

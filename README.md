@@ -499,6 +499,45 @@ tcga-medallion/
 
 ---
 
+## Ejecutor visual tipo KNIME (servicio `flow`)
+
+El servicio `flow` añade un lienzo interactivo para orquestar visualmente los pipelines medallón de:
+1. **TCGA v3**: GDC TCGA-BRCA completo (landing → bronze → silver → gold).
+2. **GEMAMX v1**: TCGA-BRCA vía API cBioPortal con normalización y variantes prioritarias.
+3. **GEMAMX v2**: Cohorte mexicana Romero-Córdoba 2021 (*Nat. Commun.* 2021, DOI 10.1038/s41467-021-22478-y) desde suplementarios MOESM8 (MAF, 28 114 variantes) y MOESM9 (drivers), top 49 variantes y FASTA con cuarentena.
+
+### Cómo levantarlo
+
+```bash
+# Levantar el servicio flow (puerto 8100 en 127.0.0.1)
+make flow-up
+
+# Ver logs del motor
+make flow-logs
+
+# Ejecutar las pruebas unitarias del ejecutor visual
+make flow-test
+
+# Detener el servicio flow
+make flow-down
+```
+
+La interfaz queda accesible en `http://127.0.0.1:8100`.
+
+### Semántica de estados (KNIME)
+- **Rojo (`idle`)**: Nodo sin ejecutar o sin configurar.
+- **Amarillo (`configured`)**: Parámetros válidos y ancestros en estado ejecutado; listo para correr.
+- **Azul (`running`)**: En ejecución activa (con subproceso aislado para tareas largas).
+- **Verde (`executed`)**: Ejecución exitosa con verificación de salidas (tablas PostgreSQL o archivos Parquet/JSON).
+- **Rojo con cruz (`error`)**: Fallo en la ejecución con mensaje y trazabilidad.
+
+### Cómo añadir un nodo al catálogo
+1. Registrar la función ejecutora en `flow/src/tcga_flow/gemamx/` o en `etl/src/tcga/`.
+2. Definir el tipo en `flow/src/tcga_flow/catalog.py`: clave única, capa (`landing`, `bronze`, `silver`, `gold`), puertos tipados (`archivos`, `tabla`, `parquet`, `json`), salidas inspeccionables (`OutputSpec`), modelo Pydantic de parámetros y función runner.
+3. Incluir el nodo y sus dependencias en el JSON correspondiente en `flow/workflows/`.
+
+---
+
 ## Limitaciones conocidas
 
 - **Volumen de datos de TCGA-BRCA:** el conjunto completo contiene ~1,300 archivos de expresión que suman aproximadamente 10–15 GB comprimidos. La primera descarga puede tardar varias horas dependiendo del ancho de banda y la velocidad del GDC.

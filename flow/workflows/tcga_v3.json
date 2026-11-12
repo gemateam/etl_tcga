@@ -1,0 +1,357 @@
+{
+  "id": "tcga_v3",
+  "name": "TCGA v3 · Medallón GDC",
+  "version": 1,
+  "description": "Pipeline medallón de datos abiertos del GDC para TCGA-BRCA: landing, bronze, silver y gold. Cada nodo invoca una función de etl/src/tcga/.",
+  "project_id": "TCGA-BRCA",
+  "variables": {
+    "project_id": "TCGA-BRCA",
+    "limit": null,
+    "gdc_data_release": null,
+    "run_id": null
+  },
+  "nodes": [
+    {
+      "id": "extract_cases",
+      "type": "extract_cases",
+      "label": "Extracción de casos",
+      "layer": "landing",
+      "position": {
+        "x": 40.0,
+        "y": 80.0
+      },
+      "params": {},
+      "notes": "Comando equivalente: tcga extract-cases",
+      "status": "confirmed",
+      "description": "Descarga los casos clínicos del GDC paginados a landing/cases/<proyecto>/page_<n>.json."
+    },
+    {
+      "id": "extract_files_manifest",
+      "type": "extract_files_manifest",
+      "label": "Manifiesto de expresión",
+      "layer": "landing",
+      "position": {
+        "x": 40.0,
+        "y": 190.0
+      },
+      "params": {},
+      "notes": "Comando equivalente: tcga extract-files-manifest",
+      "status": "confirmed",
+      "description": "Crea el manifiesto de archivos RNA-seq de expresión en landing/files/<proyecto>/manifest.json."
+    },
+    {
+      "id": "extract_maf_manifest",
+      "type": "extract_maf_manifest",
+      "label": "Manifiesto MAF",
+      "layer": "landing",
+      "position": {
+        "x": 40.0,
+        "y": 300.0
+      },
+      "params": {},
+      "notes": "Comando equivalente: tcga extract-maf-manifest",
+      "status": "confirmed",
+      "description": "Crea el manifiesto de archivos MAF de mutaciones somáticas en landing/mutations/<proyecto>/maf_manifest.json."
+    },
+    {
+      "id": "download_expressions",
+      "type": "download_expressions",
+      "label": "Descarga de expresión",
+      "layer": "landing",
+      "position": {
+        "x": 40.0,
+        "y": 410.0
+      },
+      "params": {
+        "limit": null,
+        "retry_failed": false
+      },
+      "notes": "Comando equivalente: tcga download-expressions [--limit N] [--retry-failed]",
+      "status": "confirmed",
+      "description": "Descarga idempotente de TSV con validación md5. El control vive en ops.download_control."
+    },
+    {
+      "id": "bronze_cases",
+      "type": "bronze_cases",
+      "label": "Bronze casos",
+      "layer": "bronze",
+      "position": {
+        "x": 360.0,
+        "y": 80.0
+      },
+      "params": {},
+      "notes": "Comando equivalente: tcga bronze-cases",
+      "status": "confirmed",
+      "description": "Aplana los casos JSON a Parquet y a bronze.cases_raw (JSONB)."
+    },
+    {
+      "id": "bronze_files",
+      "type": "bronze_files",
+      "label": "Bronze archivos",
+      "layer": "bronze",
+      "position": {
+        "x": 360.0,
+        "y": 190.0
+      },
+      "params": {},
+      "notes": "Comando equivalente: tcga bronze-files",
+      "status": "confirmed",
+      "description": "Aplana el manifiesto de archivos a bronze/files/<proyecto>/files.parquet."
+    },
+    {
+      "id": "bronze_expressions",
+      "type": "bronze_expressions",
+      "label": "Bronze expresión",
+      "layer": "bronze",
+      "position": {
+        "x": 360.0,
+        "y": 300.0
+      },
+      "params": {},
+      "notes": "Comando equivalente: tcga bronze-expressions",
+      "status": "confirmed",
+      "description": "Convierte los TSV de expresión a Parquet con DuckDB."
+    },
+    {
+      "id": "bronze_mutations",
+      "type": "bronze_mutations",
+      "label": "Bronze mutaciones",
+      "layer": "bronze",
+      "position": {
+        "x": 360.0,
+        "y": 410.0
+      },
+      "params": {},
+      "notes": "Comando equivalente: tcga bronze-mutations",
+      "status": "confirmed",
+      "description": "Descarga y parsea los MAF a Parquet y a bronze.mutations."
+    },
+    {
+      "id": "silver_clinical",
+      "type": "silver_clinical",
+      "label": "Silver clínica",
+      "layer": "silver",
+      "position": {
+        "x": 680.0,
+        "y": 80.0
+      },
+      "params": {},
+      "notes": "Comando equivalente: tcga silver-clinical",
+      "status": "confirmed",
+      "description": "Normaliza casos, demografía, diagnósticos, exposiciones, muestras y archivos en las tablas silver."
+    },
+    {
+      "id": "silver_case_expressions",
+      "type": "silver_case_expressions",
+      "label": "Silver expresión",
+      "layer": "silver",
+      "position": {
+        "x": 680.0,
+        "y": 190.0
+      },
+      "params": {},
+      "notes": "Comando equivalente: tcga silver-case-expressions",
+      "status": "confirmed",
+      "description": "Genera la expresión narrow con case_id, muestra y tipo de muestra en silver/case_expressions/."
+    },
+    {
+      "id": "silver_mutations",
+      "type": "silver_mutations",
+      "label": "Silver mutaciones",
+      "layer": "silver",
+      "position": {
+        "x": 680.0,
+        "y": 300.0
+      },
+      "params": {},
+      "notes": "Comando equivalente: tcga silver-mutations",
+      "status": "confirmed",
+      "description": "Mutaciones normalizadas (solo PASS, deduplicadas) en silver.mutations con tumor_sample_barcode."
+    },
+    {
+      "id": "gold_top_20_diagnosis",
+      "type": "gold_top_20_diagnosis",
+      "label": "Top 20 diagnósticos",
+      "layer": "gold",
+      "position": {
+        "x": 1000.0,
+        "y": 80.0
+      },
+      "params": {},
+      "notes": "Comando equivalente: tcga gold-top-diagnosis",
+      "status": "confirmed",
+      "description": "Los 20 diagnósticos primarios más frecuentes de la cohorte."
+    },
+    {
+      "id": "gold_sample_summary",
+      "type": "gold_sample_summary",
+      "label": "Resumen de muestras",
+      "layer": "gold",
+      "position": {
+        "x": 1000.0,
+        "y": 190.0
+      },
+      "params": {},
+      "notes": "Parte de gold-extras; nodo separado por tabla de salida.",
+      "status": "confirmed",
+      "description": "Conteo de muestras y casos por tipo de muestra, estado vital y estadio."
+    },
+    {
+      "id": "gold_gene_stats",
+      "type": "gold_gene_stats",
+      "label": "Estadísticas génicas",
+      "layer": "gold",
+      "position": {
+        "x": 1000.0,
+        "y": 300.0
+      },
+      "params": {},
+      "notes": "Parte de gold-extras; escribe gold.gene_stats y data.parquet.",
+      "status": "confirmed",
+      "description": "Media, varianza, desviación y número de muestras por gen, tipo de muestra y métrica."
+    },
+    {
+      "id": "gold_gene_dim",
+      "type": "gold_gene_dim",
+      "label": "Dimensión de genes",
+      "layer": "gold",
+      "position": {
+        "x": 1000.0,
+        "y": 410.0
+      },
+      "params": {},
+      "notes": "Parte de gold-extras. Alimenta a gold_marker_genes.",
+      "status": "confirmed",
+      "description": "Todos los genes distintos observados en la expresión silver, con su símbolo y biotipo."
+    },
+    {
+      "id": "gold_marker_genes",
+      "type": "gold_marker_genes",
+      "label": "Genes marcadores",
+      "layer": "gold",
+      "position": {
+        "x": 1000.0,
+        "y": 520.0
+      },
+      "params": {},
+      "notes": "Lo escribe seed_marker_genes() en gold-extras; el dashboard no lo dibujaba.",
+      "status": "confirmed",
+      "description": "Siembra los 8 marcadores clínicos (ESR1, PGR, ERBB2, MKI67, TP53, BRCA1, CDH1, AURKA) resolviendo su gene_id desde gold.gene_dim."
+    },
+    {
+      "id": "gold_sample_marker_values",
+      "type": "gold_sample_marker_values",
+      "label": "Valores de marcadores",
+      "layer": "gold",
+      "position": {
+        "x": 1000.0,
+        "y": 630.0
+      },
+      "params": {},
+      "notes": "Parte de gold-extras; depende de gold.marker_genes y de la expresión silver.",
+      "status": "confirmed",
+      "description": "TPM y percentil por muestra y tipo de muestra para cada marcador, con categoría Alto/Medio/Bajo."
+    },
+    {
+      "id": "gold_cx_pivot",
+      "type": "gold_cx_pivot",
+      "label": "Pivote de expresión",
+      "layer": "gold",
+      "position": {
+        "x": 1000.0,
+        "y": 740.0
+      },
+      "params": {
+        "top_genes": 100,
+        "metric": "fpkm_unstranded",
+        "log2": false,
+        "sample_type": null
+      },
+      "notes": "Comando equivalente: tcga gold-cx-pivot --top-genes 100 --metric fpkm_unstranded",
+      "status": "confirmed",
+      "description": "Calcula la varianza por gen y escribe la matriz ancha en gold.cx_pivot y gold/cx_pivot/data.parquet."
+    }
+  ],
+  "edges": [
+    {
+      "source": "extract_cases",
+      "target": "bronze_cases"
+    },
+    {
+      "source": "extract_files_manifest",
+      "target": "bronze_files"
+    },
+    {
+      "source": "extract_files_manifest",
+      "target": "download_expressions"
+    },
+    {
+      "source": "extract_maf_manifest",
+      "target": "bronze_mutations"
+    },
+    {
+      "source": "download_expressions",
+      "target": "bronze_expressions"
+    },
+    {
+      "source": "bronze_cases",
+      "target": "silver_clinical"
+    },
+    {
+      "source": "bronze_cases",
+      "target": "silver_case_expressions"
+    },
+    {
+      "source": "bronze_files",
+      "target": "silver_case_expressions"
+    },
+    {
+      "source": "bronze_expressions",
+      "target": "silver_case_expressions"
+    },
+    {
+      "source": "bronze_mutations",
+      "target": "silver_mutations"
+    },
+    {
+      "source": "bronze_files",
+      "target": "silver_clinical"
+    },
+    {
+      "source": "silver_clinical",
+      "target": "silver_case_expressions"
+    },
+    {
+      "source": "silver_clinical",
+      "target": "gold_top_20_diagnosis"
+    },
+    {
+      "source": "silver_clinical",
+      "target": "gold_sample_summary"
+    },
+    {
+      "source": "silver_case_expressions",
+      "target": "gold_gene_stats"
+    },
+    {
+      "source": "silver_case_expressions",
+      "target": "gold_gene_dim"
+    },
+    {
+      "source": "silver_case_expressions",
+      "target": "gold_sample_marker_values"
+    },
+    {
+      "source": "silver_case_expressions",
+      "target": "gold_cx_pivot"
+    },
+    {
+      "source": "gold_gene_dim",
+      "target": "gold_marker_genes"
+    },
+    {
+      "source": "gold_marker_genes",
+      "target": "gold_sample_marker_values"
+    }
+  ]
+}

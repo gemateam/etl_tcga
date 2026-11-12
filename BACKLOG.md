@@ -287,4 +287,23 @@ Como operador, quiero relanzar pasos del pipeline sin duplicar datos ni perder t
 - `etl/src/tcga/cli.py`: comandos ETL, orquestación, reportes y comprobaciones.
 - `web/app/main.py`: rutas web de estado, casos, mutaciones, expresión y reportes.
 - `gdc_case_report.py`: generación del reporte clínico/molecular ampliado.
+- `flow/`: ejecutor visual tipo KNIME para flujos medallón (TCGA v3, GEMAMX v1 y v2).
 - `tests/`: pruebas de cliente GDC, expresiones, integración, web y reportes por caso.
+
+## Épica E7. Ejecutor visual tipo KNIME (Flow)
+
+**Objetivo:** orquestar y ejecutar visualmente los pipelines medallón (TCGA v3, GEMAMX v1 y GEMAMX v2) en un lienzo con semáforo de estados, ejecución por nodo/hasta aquí, previsualización de tablas y exportación de diagramas.
+
+### Feature F7.1. Motor y catálogo cerrado de ejecución
+- **HU-7.1.1. Catálogo cerrado de nodos**: 33 tipos de nodo registrados para TCGA, GEMAMX v1 y GEMAMX v2 con validación Pydantic de parámetros y tipado de puertos.
+- **HU-7.1.2. Motor topológico y semáforos KNIME**: Estados `idle`, `configured`, `running`, `executed` y `error`. Subproceso aislado para tareas largas y registro por SSE en `ops.pipeline_runs`.
+- **HU-7.1.3. Previsualización paginada**: Lectura de muestras de 100 filas mediante `LIMIT` en PostgreSQL o DuckDB para Parquet sin carga excesiva en memoria.
+
+### Feature F7.2. Interfaz visual (React + React Flow)
+- **HU-7.2.1. Lienzo con carriles medallón**: Franjas por capa (landing `#0f766e`, bronze `#d97706`, silver `#2563eb`, gold `#7c3aed`) con semáforos bajo cada nodo.
+- **HU-7.2.2. Paneles de control y linaje**: Selector de workflows, panel de configuración, logs y vista de linaje hasta datos de origen.
+- **HU-7.2.3. Exportación**: Generación de diagramas en Mermaid, PNG y JSON.
+
+### Feature F7.3. Flujos GEMAMX en esquema medallón
+- **HU-7.3.1. GEMAMX v2 (Romero-Córdoba 2021 HM)**: Ingesta de MOESM8 (28 114 variantes, 134 pacientes) y MOESM9 (127 drivers), normalización a GRCh37, top 49 variantes (rank 1 PIK3CA H1047R freq=15) y FASTA con cuarentena (GATA3 L328H y M294K).
+- **HU-7.3.2. GEMAMX v1 (TCGA-BRCA cBioPortal)**: Ingesta de mutaciones, 15 genes diana, secuencias WT validadas, ranking top-20 y mutantes FASTA.

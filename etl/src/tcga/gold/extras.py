@@ -222,56 +222,63 @@ def populate_gene_dim(projects: list[str], settings: Settings | None = None) -> 
     silver_glob = (
         settings.silver_root() / "case_expressions" / "**" / "*.parquet"
     ).as_posix()
-    con = duck_connect(settings)
-    try:
-        cursor = con.execute(
-            f"""
-            SELECT DISTINCT project_id, gene_id, gene_name, gene_type
-            FROM read_parquet({sql_literal(silver_glob)})
-            WHERE project_id IN ({_in_placeholders(len(projects))})
-              AND gene_id IS NOT NULL
-            ORDER BY project_id, gene_id
-            """,
-            list(projects),
-        )
-        all_genes: list[tuple] = cursor.fetchall()
-    finally:
-        con.close()
 
-    if not all_genes:
-        return 0
+    with pipeline_step(
+        "gold_gene_dim", ",".join(projects), params={"projects": projects}
+    ) as run:
+        con = duck_connect(settings)
+        try:
+            cursor = con.execute(
+                f"""
+                SELECT DISTINCT project_id, gene_id, gene_name, gene_type
+                FROM read_parquet({sql_literal(silver_glob)})
+                WHERE project_id IN ({_in_placeholders(len(projects))})
+                  AND gene_id IS NOT NULL
+                ORDER BY project_id, gene_id
+                """,
+                list(projects),
+            )
+            all_genes: list[tuple] = cursor.fetchall()
+        finally:
+            con.close()
 
-    with connect() as conn:
-        conn.execute(
-            "DELETE FROM gold.gene_dim WHERE project_id = ANY(%s)", (list(projects),)
-        )
-        copy_rows(conn, "gold.gene_dim",
-                  ("project_id", "gene_id", "gene_name", "gene_type"),
-                  all_genes)
-    log.info("Gold gene_dim poblado",
-             extra={"event": "gold_gene_dim", "rows": len(all_genes)})
+        if all_genes:
+            with connect() as conn:
+                conn.execute(
+                    "DELETE FROM gold.gene_dim WHERE project_id = ANY(%s)",
+                    (list(projects),),
+                )
+                copy_rows(conn, "gold.gene_dim",
+                          ("project_id", "gene_id", "gene_name", "gene_type"),
+                          all_genes)
+
+        run.count(rows_in=len(all_genes), rows_out=len(all_genes))
+        log.info("Gold gene_dim poblado",
+                 extra={"event": "gold_gene_dim", "rows": len(all_genes)})
     return len(all_genes)
 
 
 # --------------------------------------------------------- marker_genes (G03a)
 def seed_marker_genes() -> int:
     """Inserta los marcadores en gold.marker_genes resolviendo el gene_id real."""
-    with connect() as conn:
-        # Resuelve el gene_id real (con sufijo de versión) desde gene_dim
-        resolved = []
-        for gene_name, gene_id_prefix, description, note in MARKER_GENES:
-            row = conn.execute(
-                "SELECT gene_id FROM gold.gene_dim WHERE gene_id LIKE %s LIMIT 1",
-                (gene_id_prefix + "%",),
-            ).fetchone()
-            real_id = row["gene_id"] if row else None
-            resolved.append((gene_name, real_id or gene_id_prefix, description, note))
-        conn.execute("DELETE FROM gold.marker_genes")
-        copy_rows(conn, "gold.marker_genes",
-                  ("gene_name", "gene_id", "description", "note"),
-                  resolved)
-    log.info("Gold marker_genes sembrado",
-             extra={"event": "gold_marker_genes", "rows": len(resolved)})
+    with pipeline_step("gold_marker_genes", None) as run:
+        with connect() as conn:
+            # Resuelve el gene_id real (con sufijo de versión) desde gene_dim
+            resolved = []
+            for gene_name, gene_id_prefix, description, note in MARKER_GENES:
+                row = conn.execute(
+                    "SELECT gene_id FROM gold.gene_dim WHERE gene_id LIKE %s LIMIT 1",
+                    (gene_id_prefix + "%",),
+                ).fetchone()
+                real_id = row["gene_id"] if row else None
+                resolved.append((gene_name, real_id or gene_id_prefix, description, note))
+            conn.execute("DELETE FROM gold.marker_genes")
+            copy_rows(conn, "gold.marker_genes",
+                      ("gene_name", "gene_id", "description", "note"),
+                      resolved)
+        run.count(rows_in=len(resolved), rows_out=len(resolved))
+        log.info("Gold marker_genes sembrado",
+                 extra={"event": "gold_marker_genes", "rows": len(resolved)})
     return len(resolved)
 
 

@@ -113,6 +113,47 @@ services:
     restart: unless-stopped
     networks: [tcga]
 
+  flow:
+    build:
+      context: .
+      dockerfile: flow/Dockerfile
+    image: tcga-medallion-flow:1.0.0
+    container_name: tcga-flow
+    profiles: ["flow"]
+    env_file: .env
+    environment:
+      # Igual que web: evita que DATABASE_URL externo desvíe el servicio a Render.
+      DATABASE_URL: ""
+      DATA_DIR: /data
+      SQL_DIR: /sql
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-tcga}
+      POSTGRES_USER: ${POSTGRES_USER:-tcga_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      GDC_PROJECTS: ${GDC_PROJECTS:-TCGA-BRCA}
+      DUCKDB_MEMORY_LIMIT: ${DUCKDB_MEMORY_LIMIT:-2GB}
+      DUCKDB_THREADS: ${DUCKDB_THREADS:-2}
+      GDC_DOWNLOAD_WORKERS: ${GDC_DOWNLOAD_WORKERS:-2}
+      GDC_DOWNLOAD_BATCH_BYTES: ${GDC_DOWNLOAD_BATCH_BYTES:-1000000000}
+      GDC_HTTP_TIMEOUT: ${GDC_HTTP_TIMEOUT:-120}
+      GDC_HTTP_RETRIES: ${GDC_HTTP_RETRIES:-5}
+      GDC_HTTP_BACKOFF: ${GDC_HTTP_BACKOFF:-2}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      FLOW_PORT: ${FLOW_PORT:-8100}
+      GEMAMX_DIR: /gemamx
+    volumes:
+      - ./data:/data
+      - ./flow/workflows:/app/workflows
+      - ${GEMAMX_DIR:-D:/RespaldoLaptopHP/ProyectosIA/GEMAMX}:/gemamx:ro
+    ports:
+      - "127.0.0.1:${FLOW_PORT:-8100}:8100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [tcga]
+
   adminer:
     image: adminer:4.8.1
     container_name: tcga-adminer
