@@ -33,6 +33,7 @@ interface Props {
   onRuntimeRefresh: () => void;
   onDeleteNode: (nodeId: string) => void;
   onNotice: (message: string, error?: boolean) => void;
+  onToggleCollapse?: () => void;
 }
 
 interface FieldInfo {
@@ -77,6 +78,7 @@ export function RightPanel({
   onRuntimeRefresh,
   onDeleteNode,
   onNotice,
+  onToggleCollapse,
 }: Props) {
   const [tab, setTab] = useState<Tab>("description");
   const [form, setForm] = useState<Record<string, unknown>>({});
@@ -90,6 +92,7 @@ export function RightPanel({
   const [page, setPage] = useState(1);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [lineage, setLineage] = useState<Lineage | null>(null);
@@ -295,9 +298,21 @@ export function RightPanel({
           <code>{node.type}</code>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
-          <span className={`state-pill ${runtime?.state ?? "idle"}`}>
-            {STATE_LABELS[runtime?.state ?? "idle"]}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span className={`state-pill ${runtime?.state ?? "idle"}`}>
+              {STATE_LABELS[runtime?.state ?? "idle"]}
+            </span>
+            {onToggleCollapse && (
+              <button
+                className="ghost"
+                style={{ padding: "2px 6px", fontSize: "11px" }}
+                title="Colapsar panel derecho"
+                onClick={onToggleCollapse}
+              >
+                ✕
+              </button>
+            )}
+          </div>
           <button
             className="danger"
             style={{ padding: "4px 8px", fontSize: "11px" }}
@@ -407,9 +422,18 @@ export function RightPanel({
                   <span>
                     {preview.total_rows?.toLocaleString("es") ?? "?"} filas · {formatBytes(preview.size_bytes)}
                   </span>
-                  <span>
-                    página {preview.page} · {preview.page_size} por página
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span>
+                      pág. {preview.page}
+                    </span>
+                    <button
+                      className="fullscreen-btn"
+                      onClick={() => setIsFullscreen(true)}
+                      title="Abrir tabla en pantalla completa"
+                    >
+                      ⛶ Pantalla completa
+                    </button>
+                  </div>
                 </div>
                 <div className="table-wrap">
                   <table>
@@ -540,6 +564,93 @@ export function RightPanel({
           </div>
         )}
       </div>
+
+      {isFullscreen && preview && (
+        <div className="table-fullscreen-overlay" onClick={() => setIsFullscreen(false)}>
+          <div className="table-fullscreen-modal" onClick={(e) => e.stopPropagation()}>
+            <header className="table-fullscreen-header">
+              <div>
+                <h3>
+                  <span>📊</span> Vista Previa de Salida: {node.label}
+                  {outputKey && <code style={{ fontSize: "12px", marginLeft: "8px" }}>({outputKey})</code>}
+                </h3>
+                <span style={{ fontSize: "12px", color: "var(--muted)" }}>
+                  {preview.total_rows?.toLocaleString("es") ?? "?"} filas totales · {formatBytes(preview.size_bytes)}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                {outputOptions.length > 1 && (
+                  <select
+                    value={outputKey ?? ""}
+                    onChange={(event) => {
+                      setOutputKey(event.target.value || undefined);
+                      setPage(1);
+                    }}
+                    style={{ fontSize: "12px", padding: "4px 8px" }}
+                  >
+                    {outputOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label} · {option.kind}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  className="ghost"
+                  onClick={() => setIsFullscreen(false)}
+                  style={{ fontSize: "14px", padding: "4px 10px" }}
+                  title="Cerrar pantalla completa (Esc)"
+                >
+                  ✕ Cerrar
+                </button>
+              </div>
+            </header>
+
+            <div className="table-fullscreen-body">
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      {preview.columns.map((column) => (
+                        <th key={column.name} title={column.type}>
+                          {column.name}
+                          <small>{column.type}</small>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.rows.map((row, index) => (
+                      <tr key={index}>
+                        {preview.columns.map((column) => (
+                          <td key={column.name}>{formatCell(row[column.name])}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <footer className="table-fullscreen-footer">
+              <span style={{ fontSize: "12px", color: "var(--muted)" }}>
+                Página {preview.page} · {preview.page_size} filas por página
+              </span>
+              <div className="pager" style={{ margin: 0 }}>
+                <button onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>
+                  Anterior
+                </button>
+                <button
+                  onClick={() => setPage((current) => current + 1)}
+                  disabled={preview.total_rows !== null && page * preview.page_size >= preview.total_rows}
+                >
+                  Siguiente
+                </button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

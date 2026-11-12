@@ -57,6 +57,8 @@ function FlowApp() {
   const [liveLogs, setLiveLogs] = useState<LogLine[]>([]);
   const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [collapseLeft, setCollapseLeft] = useState(false);
+  const [collapseRight, setCollapseRight] = useState(false);
   const wrapper = useRef<HTMLDivElement | null>(null);
   const { fitView, screenToFlowPosition } = useReactFlow();
 
@@ -372,6 +374,21 @@ function FlowApp() {
               <button onClick={exportPng}>PNG</button>
             </>
           )}
+          <span className="separator" />
+          <button
+            className={`panel-toggle-btn${collapseLeft ? " active" : ""}`}
+            onClick={() => setCollapseLeft((val) => !val)}
+            title="Ocultar o mostrar panel izquierdo"
+          >
+            {collapseLeft ? "⊞ Panel Izq" : "⊟ Panel Izq"}
+          </button>
+          <button
+            className={`panel-toggle-btn${collapseRight ? " active" : ""}`}
+            onClick={() => setCollapseRight((val) => !val)}
+            title="Ocultar o mostrar panel derecho"
+          >
+            {collapseRight ? "⊞ Panel Der" : "⊟ Panel Der"}
+          </button>
         </div>
       </header>
 
@@ -384,13 +401,16 @@ function FlowApp() {
         </div>
       )}
 
-      <div className="layout">
-        <LeftPanel
-          workflows={config?.workflows ?? []}
-          activeId={activeId}
-          onSelect={setActiveId}
-          catalog={catalog}
-        />
+      <div className={`layout${collapseLeft ? " left-collapsed" : ""}${collapseRight ? " right-collapsed" : ""}`}>
+        {!collapseLeft && (
+          <LeftPanel
+            workflows={config?.workflows ?? []}
+            activeId={activeId}
+            onSelect={setActiveId}
+            catalog={catalog}
+            onToggleCollapse={() => setCollapseLeft(true)}
+          />
+        )}
 
         <main
           className="flow-canvas"
@@ -445,17 +465,20 @@ function FlowApp() {
           </div>
         </main>
 
-        <RightPanel
-          workflow={workflow ?? { id: "", name: "", version: 0, description: "", project_id: "", variables: {}, nodes: [], edges: [] }}
-          node={selectedNode}
-          catalog={selectedCatalog}
-          runtime={selectedRuntime}
-          liveLogs={liveLogs}
-          onWorkflowChange={setWorkflow}
-          onRuntimeRefresh={() => activeId && void refreshRuntime(activeId)}
-          onDeleteNode={deleteNode}
-          onNotice={showNotice}
-        />
+        {!collapseRight && (
+          <RightPanel
+            workflow={workflow ?? { id: "", name: "", version: 0, description: "", project_id: "", variables: {}, nodes: [], edges: [] }}
+            node={selectedNode}
+            catalog={selectedCatalog}
+            runtime={selectedRuntime}
+            liveLogs={liveLogs}
+            onWorkflowChange={setWorkflow}
+            onRuntimeRefresh={() => activeId && void refreshRuntime(activeId)}
+            onDeleteNode={deleteNode}
+            onNotice={showNotice}
+            onToggleCollapse={() => setCollapseRight(true)}
+          />
+        )}
       </div>
 
       {notice && (

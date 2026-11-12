@@ -7,9 +7,10 @@ interface Props {
   activeId: string | null;
   onSelect: (id: string) => void;
   catalog: CatalogNode[];
+  onToggleCollapse?: () => void;
 }
 
-export function LeftPanel({ workflows, activeId, onSelect, catalog }: Props) {
+export function LeftPanel({ workflows, activeId, onSelect, catalog, onToggleCollapse }: Props) {
   const [tab, setTab] = useState<"workflows" | "nodes">("workflows");
   const grouped = useMemo(() => {
     const result = new Map<Layer, CatalogNode[]>();
@@ -32,6 +33,16 @@ export function LeftPanel({ workflows, activeId, onSelect, catalog }: Props) {
         <button className={tab === "nodes" ? "active" : ""} onClick={() => setTab("nodes")}>
           Nodos
         </button>
+        {onToggleCollapse && (
+          <button
+            className="ghost"
+            style={{ flex: "0 0 36px", padding: "8px", fontSize: "12px", borderBottom: "none" }}
+            title="Colapsar panel izquierdo"
+            onClick={onToggleCollapse}
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       {tab === "workflows" && (
