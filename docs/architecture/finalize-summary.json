@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "D:\\ProyectosIA\\etl_tcga\\.archify\\architecture-tcga-medallion-20261112-235322\\candidate.json",
+    "sha256": "4ec32225dd0e98c8e8569ba64a3cda9d2711217a581d14438545294850b229af",
+    "bytes": 6938
+  },
+  "artifact": {
+    "path": "D:\\ProyectosIA\\etl_tcga\\.archify\\architecture-tcga-medallion-20261112-235322\\tcga-medallion-architecture.html",
+    "sha256": "a4adb74855478ea0d0268c51c5a471117d6bf1e4ef7243fde6ca67268b1ea44e",
+    "bytes": 861232
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "D:\\ProyectosIA\\etl_tcga\\.archify\\architecture-tcga-medallion-20261112-235322\\review-13\\tcga-medallion-architecture.finalize.json",
+    "summaryReceipt": "D:\\ProyectosIA\\etl_tcga\\.archify\\architecture-tcga-medallion-20261112-235322\\review-13\\tcga-medallion-architecture.finalize-summary.json",
+    "browserCheckReceipt": "D:\\ProyectosIA\\etl_tcga\\.archify\\architecture-tcga-medallion-20261112-235322\\review-13\\tcga-medallion-architecture.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-11-13T06:55:01.360Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 7505,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  },
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "routesOverSuggestedBends": 2,
+      "routesOverSuggestedStretch": 1
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [],
+      "detours": [
+        {
+          "relationship": {
+            "id": "gdc-to-etl",
+            "from": "gdc-api",
+            "to": "etl-cli",
+            "label": "download cases/expr",
+            "collectionIndex": 0,
+            "artifactIndex": 1
+          },
+          "bends": 3,
+          "stretch": 1.31
+        },
+        {
+          "relationship": {
+            "id": "engine-to-canvas",
+            "from": "knime-engine",
+            "to": "knime-canvas",
+            "label": "REST + SSE events",
+            "collectionIndex": 6,
+            "artifactIndex": 7
+          },
+          "bends": 3,
+          "stretch": 1.381
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "gdc-api → etl-cli needs 3 bends: move node gdc-api or etl-cli so they share a row or column with matching centers, or sit diagonally with a clear corner.",
+      "knime-engine → knime-canvas needs 3 bends: move node knime-engine or knime-canvas so they share a row or column with matching centers, or sit diagonally with a clear corner."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

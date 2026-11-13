@@ -1,0 +1,272 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "TCGA Medallion Multi-Cohort Architecture",
+    "output": ".archify/architecture-tcga-medallion-20261112-235322/tcga-medallion-architecture.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "gdc-api",
+      "type": "external",
+      "label": "NCI GDC API",
+      "sublabel": "TCGA-BRCA open data",
+      "tag": "HTTPS REST",
+      "pos": [40, 50],
+      "size": [150, 60]
+    },
+    {
+      "id": "cbio-api",
+      "type": "external",
+      "label": "cBioPortal REST",
+      "sublabel": "Live mutations API",
+      "tag": "1,237 muts live",
+      "pos": [40, 200],
+      "size": [150, 60]
+    },
+    {
+      "id": "uniprot-api",
+      "type": "external",
+      "label": "UniProt REST API",
+      "sublabel": "Canonical FASTA",
+      "tag": "15 WT genes",
+      "pos": [40, 350],
+      "size": [150, 60]
+    },
+    {
+      "id": "romero-inputs",
+      "type": "external",
+      "label": "Romero-Córdoba 2021",
+      "sublabel": "WES + Drivers + Clinical",
+      "tag": "data/inputs/romero",
+      "pos": [40, 500],
+      "size": [150, 60]
+    },
+    {
+      "id": "etl-cli",
+      "type": "backend",
+      "label": "ETL CLI Worker",
+      "sublabel": "tcga run --project BRCA",
+      "tag": "Python 3.12 · Docker",
+      "pos": [240, 50],
+      "size": [160, 60]
+    },
+    {
+      "id": "knime-engine",
+      "type": "backend",
+      "label": "KNIME-like Engine",
+      "sublabel": "Node Catalog + Scheduler",
+      "tag": "catalog.py · FastAPI",
+      "pos": [240, 200],
+      "size": [160, 60]
+    },
+    {
+      "id": "knime-pipelines",
+      "type": "backend",
+      "label": "Workflow Pipelines",
+      "sublabel": "TCGA v3 / GEMAMX v1-v2-v2.1",
+      "tag": "4 pipelines JSON",
+      "pos": [240, 350],
+      "size": [160, 60]
+    },
+    {
+      "id": "knime-canvas",
+      "type": "frontend",
+      "label": "KNIME Visual Canvas",
+      "sublabel": "React Flow + Swimlanes",
+      "tag": ":8100 · Code Inspector",
+      "pos": [430, 200],
+      "size": [160, 60]
+    },
+    {
+      "id": "lake-landing",
+      "type": "database",
+      "label": "Landing Layer",
+      "sublabel": "data/landing/ (JSON/TSV)",
+      "tag": "Raw GDC ingest",
+      "pos": [620, 50],
+      "size": [160, 60]
+    },
+    {
+      "id": "duckdb",
+      "type": "database",
+      "label": "DuckDB",
+      "sublabel": "In-process SQL analytics",
+      "tag": "Bronze/Silver/Gold ETL",
+      "pos": [620, 200],
+      "size": [160, 60]
+    },
+    {
+      "id": "parquet-lake",
+      "type": "database",
+      "label": "Parquet Lake",
+      "sublabel": "Bronze · Silver · Gold",
+      "tag": "/data volume · PyArrow",
+      "pos": [620, 350],
+      "size": [160, 60]
+    },
+    {
+      "id": "postgres-db",
+      "type": "database",
+      "label": "PostgreSQL 16",
+      "sublabel": "silver.* gold.* ops.*",
+      "tag": "Clinical & Metadata :5432",
+      "pos": [620, 500],
+      "size": [160, 60]
+    },
+    {
+      "id": "web-reporter",
+      "type": "frontend",
+      "label": "Web Reporter",
+      "sublabel": "FastAPI + Jinja2 + HTMX",
+      "tag": ":8000 · Case reports",
+      "pos": [840, 440],
+      "size": [160, 60]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Docker Compose Stack (tcga-medallion)",
+      "wraps": [
+        "etl-cli",
+        "knime-engine",
+        "knime-pipelines",
+        "knime-canvas",
+        "lake-landing",
+        "duckdb",
+        "parquet-lake",
+        "postgres-db",
+        "web-reporter"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "KNIME-like Orchestrator (tcga-flow :8100)",
+      "wraps": [
+        "knime-engine",
+        "knime-pipelines",
+        "knime-canvas"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "gdc-to-etl",
+      "from": "gdc-api",
+      "to": "etl-cli",
+      "label": "download cases/expr",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cbio-to-engine",
+      "from": "cbio-api",
+      "to": "knime-engine",
+      "label": "live fetch mutations",
+      "variant": "emphasis"
+    },
+    {
+      "id": "uniprot-to-engine",
+      "from": "uniprot-api",
+      "to": "knime-engine",
+      "label": "fetch WT fastas",
+      "variant": "emphasis"
+    },
+    {
+      "id": "romero-to-pipelines",
+      "from": "romero-inputs",
+      "to": "knime-pipelines",
+      "label": "read MOESM 4/8/9",
+      "variant": "emphasis"
+    },
+    {
+      "id": "etl-to-landing",
+      "from": "etl-cli",
+      "to": "lake-landing",
+      "label": "store raw GDC"
+    },
+    {
+      "id": "pipelines-to-engine",
+      "from": "knime-pipelines",
+      "to": "knime-engine",
+      "label": "workflow definitions"
+    },
+    {
+      "id": "engine-to-canvas",
+      "from": "knime-engine",
+      "to": "knime-canvas",
+      "label": "REST + SSE events"
+    },
+    {
+      "id": "landing-to-duckdb",
+      "from": "lake-landing",
+      "to": "duckdb",
+      "label": "transform & load"
+    },
+    {
+      "id": "engine-to-duckdb",
+      "from": "knime-engine",
+      "to": "duckdb",
+      "label": "execute nodes",
+      "fromSide": "top",
+      "toSide": "top"
+    },
+    {
+      "id": "duckdb-to-parquet",
+      "from": "duckdb",
+      "to": "parquet-lake",
+      "label": "write Bronze/Silver/Gold"
+    },
+    {
+      "id": "duckdb-to-postgres",
+      "from": "duckdb",
+      "to": "postgres-db",
+      "label": "INSERT clinical rows"
+    },
+    {
+      "id": "postgres-to-web",
+      "from": "postgres-db",
+      "to": "web-reporter",
+      "label": "SQL queries"
+    },
+    {
+      "id": "parquet-to-web",
+      "from": "parquet-lake",
+      "to": "web-reporter",
+      "label": "Gold reports"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Multi-Cohort Sources",
+      "items": [
+        "NCI GDC API: TCGA-BRCA open access cases and expression files",
+        "cBioPortal REST: Live somatic mutations brca_tcga_all (1,237 muts)",
+        "UniProt REST: Canonical WT FASTA for 15 key genes",
+        "Romero-Córdoba 2021: Mexican breast cancer WES and clinical MOESM"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "KNIME-like Orchestrator",
+      "items": [
+        "Node Catalog: 30+ typed nodes (landing, bronze, silver, gold)",
+        "Workflow Engine: DAG scheduler, SSE live events, node state machine",
+        "4 Pipelines: TCGA v3, GEMAMX v1 (cBioPortal), v2 (WES), v2.1 (clinical)",
+        "Visual Canvas: React Flow swimlanes, code inspector, fullscreen mode"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Data Engines",
+      "items": [
+        "DuckDB: In-process columnar SQL for Parquet ETL and analytics",
+        "PostgreSQL 16: Relational store for silver.*, gold.*, ops.* schemas",
+        "Parquet Lake: Bronze, Silver, Gold files in /data Docker volume",
+        "PyArrow: Serialization layer for all Parquet reads and writes"
+      ]
+    }
+  ]
+}

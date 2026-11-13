@@ -175,6 +175,15 @@ También está disponible `python gdc_case_report.py TCGA-5L-AAT1 --out out` par
 
 El sistema implementa una **Arquitectura Medallón Multi-Cohorte** (Landing → Bronze → Silver → Gold) orquestada a través del ejecutor interactivo reactivo (`flow`) y consumida tanto por la aplicación web analítica (`web`) como por herramientas de bioinformática y visualización.
 
+> Diagrama interactivo versionado: [`docs/architecture/`](docs/architecture/README.md) · [abrir HTML](docs/architecture/tcga-medallion-architecture.html)
+
+<details>
+<summary>Vista previa del diagrama</summary>
+
+![Arquitectura TCGA Medallion](docs/architecture/preview-light.png)
+
+</details>
+
 ```mermaid
 flowchart TD
     subgraph FUENTES[" Fuentes Externas & Locales "]
