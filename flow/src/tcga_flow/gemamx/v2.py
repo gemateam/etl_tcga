@@ -44,6 +44,33 @@ UNIPROT_MAP = {
 }
 
 
+def resolve_romero_file(filename: str, data_dir: Path | None = None, gemamx_dir: Path | None = None) -> Path:
+    """Busca un archivo MOESM en los insumos locales del proyecto o en gemamx_dir."""
+    candidates: list[Path] = []
+    if data_dir:
+        candidates.extend([
+            data_dir / "inputs" / "romero" / filename,
+            data_dir / "romero" / filename,
+            data_dir / filename,
+        ])
+    if gemamx_dir:
+        candidates.extend([
+            gemamx_dir / "data" / "romero" / filename,
+            gemamx_dir / filename,
+        ])
+
+    for c in candidates:
+        if c.exists():
+            return c
+
+    # Fallback al path canónico local del proyecto
+    if data_dir:
+        return data_dir / "inputs" / "romero" / filename
+    if gemamx_dir:
+        return gemamx_dir / "data" / "romero" / filename
+    return Path(filename)
+
+
 def _norm_pchange(hgvsp: Any, pchange_raw: Any) -> str | None:
     if hgvsp:
         s = str(hgvsp).strip()
@@ -67,7 +94,7 @@ def _classify_variant(pct: float) -> str:
 
 def read_moesm8_maf(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
     """Bronze: Lee la hoja 'HM maf' de MOESM8 y la guarda en bronze/romero_maf.parquet."""
-    xlsx_path = gemamx_dir / "data" / "romero" / "41467_2021_22478_MOESM8_ESM.xlsx"
+    xlsx_path = resolve_romero_file("41467_2021_22478_MOESM8_ESM.xlsx", data_dir=data_dir, gemamx_dir=gemamx_dir)
     if not xlsx_path.exists():
         raise FileNotFoundError(f"No se encontró MOESM8 en {xlsx_path}")
 
@@ -128,7 +155,7 @@ def read_moesm8_maf(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
 
 def read_moesm9_drivers(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
     """Bronze: Lee la hoja 'Driver mutation in HM' de MOESM9 y la guarda en bronze/romero_drivers.parquet."""
-    xlsx_path = gemamx_dir / "data" / "romero" / "41467_2021_22478_MOESM9_ESM.xlsx"
+    xlsx_path = resolve_romero_file("41467_2021_22478_MOESM9_ESM.xlsx", data_dir=data_dir, gemamx_dir=gemamx_dir)
     if not xlsx_path.exists():
         raise FileNotFoundError(f"No se encontró MOESM9 en {xlsx_path}")
 

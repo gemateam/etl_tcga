@@ -40,6 +40,8 @@ import openpyxl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from .v2 import resolve_romero_file
+
 TARGET_15_GENES = {
     "PIK3CA", "TP53", "ERBB2", "BRCA1", "BRCA2",
     "CDH1", "GATA3", "MAP3K1", "KMT2C", "PTEN",
@@ -76,7 +78,7 @@ def _v2_path(data_dir: Path, step: str) -> Path:
 
 def step_moesm8_reader(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
     """1.1 Excel Reader: MOESM8 (MAF)."""
-    xlsx_path = gemamx_dir / "data" / "romero" / "41467_2021_22478_MOESM8_ESM.xlsx"
+    xlsx_path = resolve_romero_file("41467_2021_22478_MOESM8_ESM.xlsx", data_dir=data_dir, gemamx_dir=gemamx_dir)
     if not xlsx_path.exists():
         raise FileNotFoundError(f"No se encontró MOESM8 en {xlsx_path}")
 
@@ -146,7 +148,7 @@ def step_moesm8_key(data_dir: Path) -> dict[str, Any]:
 
 def step_moesm9_reader(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
     """1.3 Excel Reader: MOESM9 (drivers)."""
-    xlsx_path = gemamx_dir / "data" / "romero" / "41467_2021_22478_MOESM9_ESM.xlsx"
+    xlsx_path = resolve_romero_file("41467_2021_22478_MOESM9_ESM.xlsx", data_dir=data_dir, gemamx_dir=gemamx_dir)
     if not xlsx_path.exists():
         raise FileNotFoundError(f"No se encontró MOESM9 en {xlsx_path}")
 

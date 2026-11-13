@@ -29,6 +29,8 @@ import openpyxl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from .v2 import resolve_romero_file
+
 from tcga_flow.gemamx.v2 import (
     AA_MAP,
     TARGET_15_GENES,
@@ -69,7 +71,7 @@ def _parse_float(val: Any) -> float | None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def read_moesm4_clinical(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
-    moesm4_path = gemamx_dir / "data" / "romero" / "41467_2021_22478_MOESM4_ESM.xlsx"
+    moesm4_path = resolve_romero_file("41467_2021_22478_MOESM4_ESM.xlsx", data_dir=data_dir, gemamx_dir=gemamx_dir)
     if not moesm4_path.exists():
         raise FileNotFoundError(f"No se encontró MOESM4 en {moesm4_path}")
 

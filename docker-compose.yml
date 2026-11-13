@@ -141,11 +141,10 @@ services:
       GDC_HTTP_BACKOFF: ${GDC_HTTP_BACKOFF:-2}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       FLOW_PORT: ${FLOW_PORT:-8100}
-      GEMAMX_DIR: /gemamx
+      GEMAMX_DIR: /data/inputs/romero
     volumes:
       - ./data:/data
       - ./flow/workflows:/app/workflows
-      - ${GEMAMX_DIR:-D:/RespaldoLaptopHP/ProyectosIA/GEMAMX}:/gemamx:ro
     ports:
       - "127.0.0.1:${FLOW_PORT:-8100}:8100"
     depends_on:

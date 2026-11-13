@@ -50,7 +50,7 @@ class FlowSettings:
             etl=etl,
             workflows_dir=workflows_dir,
             frontend_dist=frontend_dist,
-            gemamx_dir=Path(_env("GEMAMX_DIR", "D:/RespaldoLaptopHP/ProyectosIA/GEMAMX")),
+            gemamx_dir=Path(_env("GEMAMX_DIR", str(etl.data_dir / "inputs" / "romero"))),
             flow_port=int(_env("FLOW_PORT", "8100")),
             log_level=_env("LOG_LEVEL", "INFO").upper(),
         )
