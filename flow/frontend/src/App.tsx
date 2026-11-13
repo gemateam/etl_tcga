@@ -139,6 +139,19 @@ function FlowApp() {
     return () => window.clearInterval(interval);
   }, [runtime?.execution, activeId, refreshRuntime]);
 
+  // Reajustar la vista del lienzo cuando se colapsan o expanden los paneles
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      fitView({ padding: 0.12, duration: 250 });
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [collapseLeft, collapseRight, fitView]);
+
+  const selectedWorkflow = useMemo(
+    () => config?.workflows.find((w) => w.id === activeId) ?? null,
+    [config, activeId],
+  );
+
   const selectedNode = useMemo(
     () => workflow?.nodes.find((node) => node.id === selectedId) ?? null,
     [workflow, selectedId],
@@ -336,12 +349,26 @@ function FlowApp() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
-          <span className="logo" />
-          <div>
-            <strong>TCGA Medallion Flow</strong>
-            <small>Ejecutor visual de ETL · esquema medallón</small>
+        <div className="brand-group">
+          <div className="brand">
+            <span className="logo" />
+            <div>
+              <strong>TCGA Medallion Flow</strong>
+              <small>Ejecutor visual de ETL · esquema medallón</small>
+            </div>
           </div>
+          {selectedWorkflow && (
+            <div className="active-workflow-badge" title={selectedWorkflow.description ?? ""}>
+              <span className="badge-dot" />
+              <div className="badge-text">
+                <span className="badge-name">{selectedWorkflow.name}</span>
+                <span className="badge-meta">
+                  {nodes.length} nodos · {edges.length} aristas
+                  {selectedWorkflow.project_id ? ` · ${selectedWorkflow.project_id}` : ""}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
         <div className="toolbar">
           <button onClick={executeAll} disabled={!workflow || busy || running}>
