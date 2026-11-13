@@ -171,25 +171,78 @@ También está disponible `python gdc_case_report.py TCGA-5L-AAT1 --out out` par
 
 ---
 
-## Arquitectura del pipeline
+## Arquitectura del proyecto
 
-```
-API del GDC
-    │
-    ▼
-landing/            ← JSON y TSV tal como los entrega el GDC
-    │
-    ▼
-bronze/             ← Parquet sin transformar + JSONB en PostgreSQL
-    │
-    ▼
-silver/             ← Tipos correctos, llaves definidas, normalizadas
-    │             ← Parquet (expresión) + tablas PostgreSQL (clínico)
-    ▼
-gold/               ← Tablas listas para consumo y reportes
-    │             ← Parquet + tablas PostgreSQL
-    ▼
-web                 ← FastAPI + Jinja2 + HTMX + Plotly
+El sistema implementa una **Arquitectura Medallón Multi-Cohorte** (Landing → Bronze → Silver → Gold) orquestada a través del ejecutor interactivo reactivo (`flow`) y consumida tanto por la aplicación web analítica (`web`) como por herramientas de bioinformática y visualización.
+
+```mermaid
+flowchart TD
+    subgraph FUENTES[" Fuentes Externas & Locales "]
+        GDC["🌐 NCI GDC API (TCGA-BRCA)"]
+        CBIO["🌐 cBioPortal REST API (En vivo)"]
+        UNIPROT["🌐 UniProt REST API (Fasta WT)"]
+        ROMERO["📁 data/inputs/romero/ (WES + Drivers + Clínica MOESM)"]
+    end
+
+    subgraph LANDING[" Capa Landing "]
+        L_GDC["data/landing/ (JSON/TSV crudos GDC)"]
+        L_ROM["data/inputs/romero/ (MOESM4, 8, 9 XLSX)"]
+    end
+
+    subgraph BRONZE[" Capa Bronze "]
+        B_TCGA["Bronze GDC: cases_raw, files, expressions (.parquet + JSONB)"]
+        B_CBIO["Bronze cBio: cbio_mutations.parquet (1,237 muts)"]
+        B_GENES["Bronze cBio: cbio_genes.parquet (15 genes + tiers)"]
+        B_FASTA["Bronze Fasta: WT fasta (15 genes UniProt)"]
+        B_ROM_M8["Bronze Romero: MOESM8 WES Raw"]
+        B_ROM_M9["Bronze Romero: MOESM9 Drivers Raw"]
+        B_ROM_M4["Bronze Romero: MOESM4 Clinical Raw"]
+    end
+
+    subgraph SILVER[" Capa Silver "]
+        S_CLIN["PostgreSQL silver.* (cases, demographics, diagnoses, samples)"]
+        S_EXPR["data/silver/case_expressions/ (narrow parquet)"]
+        S_NORM["data/gemamx/v1/silver/normalized_mutations.parquet"]
+        S_JOIN["data/gemamx/silver/romero/ (Joiner WES + Drivers + Coordenadas HG19)"]
+        S_CLIN_NORM["data/gemamx/silver/romero/clinical.parquet (IHC, PAM50, SBR)"]
+    end
+
+    subgraph GOLD[" Capa Gold "]
+        G_DIAG["gold.top_20_diagnosis & gold.sample_summary"]
+        G_PIVOT["gold.cx_pivot (Matriz ancha de expresión)"]
+        G_STATS["gold.mutation_stats (Distribuciones genómicas y tipos)"]
+        G_TOP["gold.top_variants (Ranking completo sin truncar, 312 variantes)"]
+        G_CLIN_VAR["gold.variant_clinical_summary (Cruce mutaciones x subtipos)"]
+    end
+
+    subgraph APPS[" Interfaz & Consumo Unificado "]
+        FLOW_UI["⚡ Orquestador Visual KNIME (http://localhost:8100)\n• React Flow + Swimlanes Dinámicas\n• Inspección de Código Fuente en Vivo\n• Catálogo de Nodos & Ejecutor Multi-Pipeline"]
+        WEB_UI["📊 Reporteador Analítico & Clínico (http://localhost:8000)\n• FastAPI + Jinja2 + HTMX + Plotly\n• Ficha de Casos Hispanos/Latinos con Tablas Responsivas"]
+    end
+
+    %% Conexiones Fuentes -> Landing / Bronze
+    GDC --> L_GDC
+    L_GDC --> B_TCGA
+    CBIO --> B_CBIO
+    CBIO --> B_GENES
+    UNIPROT --> B_FASTA
+    ROMERO --> L_ROM
+    L_ROM --> B_ROM_M8 & B_ROM_M9 & B_ROM_M4
+
+    %% Conexiones Bronze -> Silver
+    B_TCGA --> S_CLIN & S_EXPR
+    B_CBIO & B_GENES --> S_NORM
+    B_ROM_M8 & B_ROM_M9 --> S_JOIN
+    B_ROM_M4 --> S_CLIN_NORM
+
+    %% Conexiones Silver -> Gold
+    S_CLIN & S_EXPR --> G_DIAG & G_PIVOT
+    S_NORM --> G_STATS & G_TOP
+    S_JOIN & S_CLIN_NORM --> G_CLIN_VAR
+
+    %% Conexiones Gold -> Apps
+    GOLD --> WEB_UI
+    LANDING & BRONZE & SILVER & GOLD -.->|Monitoreo e Inspección| FLOW_UI
 ```
 
 ### Capa landing
