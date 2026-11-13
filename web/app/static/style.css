@@ -387,6 +387,27 @@ footer a { color: var(--brand); }
 .record-details { max-width: min(380px, 72vw); }
 .record-details .kv { grid-template-columns: minmax(0, max-content) minmax(0, 1fr); }
 .record-details .kv dd { min-width: 0; overflow-wrap: anywhere; }
+
+/* En el reporte ampliado, las secciones desplegables deben ocupar el 100% del ancho del card */
+.case-report .record-details {
+  max-width: 100%;
+  width: 100%;
+}
+.case-report .record-details .table {
+  width: 100%;
+  min-width: 620px;
+}
+.case-report .record-details .table th,
+.case-report .record-details .table td {
+  padding: 8px 12px;
+}
+.case-report .table-scroll {
+  width: 100%;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+}
 .file-name-cell { max-width: 240px; overflow-wrap: anywhere; word-break: break-word; }
 .expr-table td, .expr-table th { white-space: nowrap; }
 .expr-table .bar-cell { min-width: 80px; }
