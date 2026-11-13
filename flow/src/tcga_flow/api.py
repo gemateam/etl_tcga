@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import ValidationError
 
-from .catalog import catalog_payload
+from .catalog import catalog_payload, get_node_source
 from .engine import BusyError, Engine, EngineError, iter_sse
 from .lineage import lineage
 from .preview import PreviewError, PreviewService
@@ -149,6 +149,14 @@ def build_router() -> APIRouter:
     @router.get("/catalog")
     def catalog() -> JSONResponse:
         return JSONResponse({"nodes": catalog_payload()})
+
+    @router.get("/catalog/{node_type_id}/source")
+    def node_source(node_type_id: str) -> JSONResponse:
+        """Devuelve el código fuente Python de la implementación de un tipo de nodo."""
+        try:
+            return JSONResponse(get_node_source(node_type_id))
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Tipo de nodo desconocido: {node_type_id}")
 
     @router.get("/workflows")
     def workflows(request: Request) -> JSONResponse:

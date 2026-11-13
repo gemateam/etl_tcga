@@ -7,6 +7,9 @@ arbitrario: solo los tipos registrados aquí.
 
 from __future__ import annotations
 
+import importlib
+import inspect
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Literal
@@ -1119,6 +1122,60 @@ def get_node_type(type_id: str) -> NodeType:
         return NODE_TYPES[type_id]
     except KeyError as exc:
         raise KeyError(f"Tipo de nodo no registrado: {type_id}") from exc
+
+
+def get_node_type(type_id: str) -> NodeType:
+    """Devuelve el NodeType registrado o lanza KeyError."""
+    if type_id not in NODE_TYPES:
+        raise KeyError(type_id)
+    return NODE_TYPES[type_id]
+
+
+def get_node_source(type_id: str) -> dict[str, str]:
+    """Devuelve el código fuente Python de la implementación real de un nodo.
+
+    Estrategia:
+    1. Obtiene el wrapper de ``NodeType.run`` con ``inspect.getsource``.
+    2. Busca la importación ``from .modulo import funcion`` dentro del wrapper.
+    3. Importa el módulo y extrae el fuente de la función destino.
+    4. Si no encuentra importación, retorna el wrapper como fallback.
+    """
+    nt = get_node_type(type_id)
+    try:
+        wrapper_src = inspect.getsource(nt.run)
+    except (OSError, TypeError):
+        return {
+            "module": "tcga_flow.catalog",
+            "function": nt.run.__name__,
+            "code": "# Código fuente no disponible",
+            "language": "python",
+        }
+
+    # Patrón: captura el primer `from .X import Y` dentro del wrapper
+    m = re.search(r'from\s+([.\w]+)\s+import\s+(\w+)', wrapper_src)
+    if m:
+        mod_rel, fn_name = m.group(1), m.group(2)
+        try:
+            package = "tcga_flow" if mod_rel.startswith(".") else None
+            mod = importlib.import_module(mod_rel, package=package)
+            fn = getattr(mod, fn_name, None)
+            if fn and callable(fn):
+                return {
+                    "module": mod.__name__,
+                    "function": fn_name,
+                    "code": inspect.getsource(fn),
+                    "language": "python",
+                }
+        except Exception:
+            pass  # fallback al wrapper
+
+    # Fallback: retorna el wrapper completo
+    return {
+        "module": "tcga_flow.catalog",
+        "function": nt.run.__name__,
+        "code": wrapper_src,
+        "language": "python",
+    }
 
 
 def catalog_payload() -> list[dict[str, Any]]:

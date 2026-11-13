@@ -148,3 +148,10 @@ export interface Lineage {
   nodes: LineageNode[];
   edges: WorkflowEdge[];
 }
+
+export interface NodeSource {
+  module: string;
+  function: string;
+  code: string;
+  language: string;
+}

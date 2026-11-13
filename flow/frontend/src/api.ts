@@ -3,6 +3,7 @@ import type {
   CatalogNode,
   Lineage,
   LogLine,
+  NodeSource,
   NodeState,
   PreviewPage,
   Workflow,
@@ -96,6 +97,8 @@ export const api = {
   globalLog: (after = 0) => request<{ lines: LogLine[] }>(`/logs?after=${after}`),
   lineage: (workflowId: string, nodeId: string) =>
     request<Lineage>(`/workflows/${workflowId}/lineage/${nodeId}`),
+  nodeSource: (nodeTypeId: string) =>
+    request<NodeSource>(`/catalog/${encodeURIComponent(nodeTypeId)}/source`),
   exportJsonUrl: (workflowId: string) =>
     `${BASE}/workflows/${workflowId}/export.json`,
   exportMermaidUrl: (workflowId: string) =>

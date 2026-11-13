@@ -5,6 +5,7 @@ import type {
   Lineage,
   LogLine,
   NodeRuntime,
+  NodeSource,
   PreviewPage,
   Workflow,
   WorkflowNode,
@@ -12,7 +13,7 @@ import type {
 import { api, STATE_LABELS } from "../api";
 import { LAYER_COLORS, formatBytes } from "../graph";
 
-type Tab = "description" | "config" | "output" | "log" | "lineage" | "notes";
+type Tab = "description" | "config" | "output" | "log" | "lineage" | "notes" | "code";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "description", label: "Descripción" },
@@ -21,6 +22,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "log", label: "Log" },
   { key: "lineage", label: "Linaje" },
   { key: "notes", label: "Notas" },
+  { key: "code", label: "Código" },
 ];
 
 interface Props {
@@ -97,6 +99,10 @@ export function RightPanel({
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [lineage, setLineage] = useState<Lineage | null>(null);
   const [lineageError, setLineageError] = useState<string | null>(null);
+  const [nodeSource, setNodeSource] = useState<NodeSource | null>(null);
+  const [nodeSourceError, setNodeSourceError] = useState<string | null>(null);
+  const [nodeSourceLoading, setNodeSourceLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setTab("description");
@@ -111,6 +117,9 @@ export function RightPanel({
     setLogs([]);
     setLineage(null);
     setLineageError(null);
+    setNodeSource(null);
+    setNodeSourceError(null);
+    setCopied(false);
   }, [node?.id, catalog?.key]);
 
   const outputOptions = catalog?.output_specs ?? [];
@@ -174,6 +183,32 @@ export function RightPanel({
       alive = false;
     };
   }, [tab, workflow.id, node?.id]);
+
+  // ── Código fuente del nodo ────────────────────────────────
+  useEffect(() => {
+    if (tab !== "code" || !catalog) return;
+    if (nodeSource && !nodeSourceError) return; // ya cargado para este nodo
+    let alive = true;
+    setNodeSourceLoading(true);
+    setNodeSourceError(null);
+    api
+      .nodeSource(catalog.key)
+      .then((payload) => {
+        if (alive) {
+          setNodeSource(payload);
+          setNodeSourceLoading(false);
+        }
+      })
+      .catch((error) => {
+        if (alive) {
+          setNodeSourceError(error instanceof Error ? error.message : String(error));
+          setNodeSourceLoading(false);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [tab, catalog?.key]);
 
   const mergedLogs = useMemo(() => {
     const bySeq = new Map<number, LogLine>();
@@ -514,6 +549,40 @@ export function RightPanel({
                 </ul>
               </div>
             ))}
+          </div>
+        )}
+
+        {tab === "code" && (
+          <div className="stack">
+            {nodeSourceLoading && <p className="muted">Cargando código fuente…</p>}
+            {nodeSourceError && <p className="error-text">{nodeSourceError}</p>}
+            {nodeSource && (
+              <>
+                <p className="code-module-label">
+                  <span>📦</span>
+                  <span>
+                    <strong>{nodeSource.module}</strong>
+                    <span style={{ color: "var(--muted)", margin: "0 4px" }}>›</span>
+                    <code style={{ fontSize: "10.5px" }}>{nodeSource.function}()</code>
+                  </span>
+                </p>
+                <div className="code-block-wrap">
+                  <button
+                    className="code-copy-btn"
+                    title="Copiar código al portapapeles"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(nodeSource.code).then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      });
+                    }}
+                  >
+                    {copied ? "✓ Copiado" : "⎘ Copiar"}
+                  </button>
+                  <pre className="code-block"><code>{nodeSource.code}</code></pre>
+                </div>
+              </>
+            )}
           </div>
         )}
 
