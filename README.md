@@ -501,10 +501,24 @@ tcga-medallion/
 
 ## Ejecutor visual tipo KNIME (servicio `flow`)
 
-El servicio `flow` añade un lienzo interactivo para orquestar visualmente los pipelines medallón de:
-1. **TCGA v3**: GDC TCGA-BRCA completo (landing → bronze → silver → gold).
-2. **GEMAMX v1**: TCGA-BRCA vía API cBioPortal con normalización y variantes prioritarias.
-3. **GEMAMX v2**: Cohorte mexicana Romero-Córdoba 2021 (*Nat. Commun.* 2021, DOI 10.1038/s41467-021-22478-y) desde suplementarios MOESM8 (MAF, 28 114 variantes) y MOESM9 (drivers), top 49 variantes y FASTA con cuarentena.
+El servicio `flow` añade un lienzo interactivo y reactivo para orquestar visualmente los pipelines medallón de:
+1. **TCGA v3**: GDC TCGA-BRCA completo (landing → bronze → silver → gold; 18 nodos, 20 aristas).
+2. **GEMAMX v1**: TCGA-BRCA vía API cBioPortal con normalización y variantes prioritarias (DNA-only).
+3. **GEMAMX v2**: Cohorte mexicana Romero-Córdoba 2021 (*Nat. Commun.* 2021, DOI 10.1038/s41467-021-22478-y) desde suplementarios MOESM8 (MAF) y MOESM9 (drivers), filtrado de genes clave y cálculo de top variantes.
+4. **GEMAMX v2.1**: Extensión clínica y genómica que incorpora enriquecimiento de datos clínicos MOESM4 (IHC · PAM50 · SBR) y cruce con variantes somáticas (M1-M2 + M5).
+
+### Características y UI
+- **Página Unificada con Pestañas Independientes**:
+  - `⚡ Flujos (8100)`: Lienzo interactivo del orquestador tipo KNIME.
+  - `📊 Reporteador v3 (8000)`: Integración directa del reporteador analítico y clínico TCGA-BRCA.
+- **Pestaña "Código" y Pantalla Completa**:
+  - Inspección del código fuente Python real asociado a cada nodo seleccionado en el catálogo.
+  - Botón de pantalla completa (`⛶ Pantalla completa`) y copia al portapapeles (`⎘ Copiar`) para código y salidas de datos (tablas).
+- **Swimlanes Dinámicas Adaptables**:
+  - Las franjas de capas (`LANDING`, `BRONZE`, `SILVER`, `GOLD`) ajustan automáticamente su ancho y altura a las coordenadas reales de los nodos.
+- **Paneles Colapsables**:
+  - El panel izquierdo se colapsa a un riel vertical (44px) con el nombre del flujo activo y botón de re-expansión.
+  - El panel derecho se colapsa manteniendo visible el flujo seleccionado.
 
 ### Cómo levantarlo
 
