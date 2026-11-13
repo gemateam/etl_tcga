@@ -154,25 +154,45 @@ def fetch_uniprot_fasta(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
 
 
 def normalize_v1_mutations(data_dir: Path) -> dict[str, Any]:
-    """Silver: Normaliza mutaciones de cBioPortal con cohorte y ensamble en silver unificado."""
-    bronze_file = data_dir / "gemamx" / "v1" / "bronze" / "cbio_mutations.parquet"
-    if not bronze_file.exists():
-        raise FileNotFoundError(f"No existe {bronze_file}")
+    """Silver: Normaliza mutaciones de cBioPortal con cohorte, ensamble y tier de genes en silver unificado."""
+    bronze_mut_file = data_dir / "gemamx" / "v1" / "bronze" / "cbio_mutations.parquet"
+    if not bronze_mut_file.exists():
+        raise FileNotFoundError(f"No existe {bronze_mut_file}")
+
+    bronze_genes_file = data_dir / "gemamx" / "v1" / "bronze" / "cbio_genes.parquet"
 
     con = duckdb.connect()
     try:
-        query = f"""
-            SELECT
-                hugo_symbol,
-                variant_classification,
-                protein_change,
-                sample_id,
-                chromosome,
-                CAST(start_position AS BIGINT) AS start_position,
-                'TCGA-BRCA-cBioPortal' AS cohorte,
-                'GRCh37' AS ensamble
-            FROM read_parquet('{bronze_file.as_posix()}')
-        """
+        if bronze_genes_file.exists():
+            query = f"""
+                SELECT
+                    m.hugo_symbol,
+                    COALESCE(g.tier, 3) AS tier,
+                    m.variant_classification,
+                    m.protein_change,
+                    m.sample_id,
+                    m.chromosome,
+                    CAST(m.start_position AS BIGINT) AS start_position,
+                    'TCGA-BRCA-cBioPortal' AS cohorte,
+                    'GRCh37' AS ensamble
+                FROM read_parquet('{bronze_mut_file.as_posix()}') m
+                LEFT JOIN read_parquet('{bronze_genes_file.as_posix()}') g
+                    ON m.hugo_symbol = g.gene_symbol
+            """
+        else:
+            query = f"""
+                SELECT
+                    hugo_symbol,
+                    3 AS tier,
+                    variant_classification,
+                    protein_change,
+                    sample_id,
+                    chromosome,
+                    CAST(start_position AS BIGINT) AS start_position,
+                    'TCGA-BRCA-cBioPortal' AS cohorte,
+                    'GRCh37' AS ensamble
+                FROM read_parquet('{bronze_mut_file.as_posix()}')
+            """
         df = con.execute(query).df()
     finally:
         con.close()
@@ -212,7 +232,7 @@ def wt_sequences(data_dir: Path) -> dict[str, Any]:
 
 
 def compute_v1_top_variants(data_dir: Path) -> dict[str, Any]:
-    """Gold: Filtro Missense en los 15 genes clave y ranking Top-20."""
+    """Gold: Ranking completo de frecuencias de variantes Missense sin truncar."""
     silver_file = data_dir / "gemamx" / "v1" / "silver" / "normalized_mutations.parquet"
     if not silver_file.exists():
         raise FileNotFoundError(f"No existe {silver_file}")
@@ -237,7 +257,6 @@ def compute_v1_top_variants(data_dir: Path) -> dict[str, Any]:
               AND protein_change IS NOT NULL
             GROUP BY hugo_symbol, protein_change
             ORDER BY frequency DESC
-            LIMIT 20
         """
         rows = con.execute(query).fetchall()
         cols = [desc[0] for desc in con.description]

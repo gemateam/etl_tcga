@@ -2,7 +2,7 @@
   "id": "gemamx_v1",
   "name": "GEMAMX v1 · TCGA-BRCA cBioPortal",
   "version": 2,
-  "description": "Pipeline medallón para TCGA-BRCA vía API de cBioPortal: ingesta de mutaciones somáticas (60 864 variantes), normalización de coordenadas y entrega en Gold de mutation_stats y top_variants (Top-20 missense).",
+  "description": "Pipeline medallón para TCGA-BRCA vía API de cBioPortal: ingesta de mutaciones somáticas, catálogo de genes, enriquecimiento de coordenadas y entrega en Gold de mutation_stats y top_variants (ranking completo missense).",
   "project_id": null,
   "variables": {
     "study_id": "brca_tcga",
@@ -77,7 +77,7 @@
         "y": 221.79602649006625
       },
       "params": {},
-      "notes": "Oro listo para pipelines · Top-20 missense en los 15 genes clave (PIK3CA H1047R rank 1).",
+      "notes": "Oro listo para pipelines · Ranking completo de variantes missense en los genes clave (PIK3CA H1047R rank 1).",
       "status": "confirmed",
       "description": "Insumo Gold 2: ranking de variantes prioritarias."
     }
@@ -85,6 +85,10 @@
   "edges": [
     {
       "source": "fetch_mutations",
+      "target": "normalize"
+    },
+    {
+      "source": "fetch_genes",
       "target": "normalize"
     },
     {

@@ -71,7 +71,7 @@ class TestGemamxV1Gold:
         self._seed_silver(data_dir)
         res = compute_v1_top_variants(data_dir)
 
-        assert res["top_variants_count"] <= 20
+        assert res["top_variants_count"] > 200
         assert res["rank_1"]["hugo_symbol"] == "PIK3CA"
         assert res["rank_1"]["protein_change"] == "H1047R"
 
@@ -108,5 +108,5 @@ class TestGemamxV1Workflow:
 
         assert wf.id == "gemamx_v1"
         assert len(wf.nodes) == 5
-        assert len(wf.edges) == 3
+        assert len(wf.edges) == 4
 
