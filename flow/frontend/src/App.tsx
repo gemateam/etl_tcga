@@ -46,6 +46,7 @@ function defaultParams(catalogNode: CatalogNode): Record<string, unknown> {
 }
 
 function FlowApp() {
+  const [appMode, setAppMode] = useState<"flow" | "report">("flow");
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [catalog, setCatalog] = useState<CatalogNode[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -357,7 +358,25 @@ function FlowApp() {
               <small>Ejecutor visual de ETL · esquema medallón</small>
             </div>
           </div>
-          {selectedWorkflow && (
+          <nav className="app-mode-tabs" aria-label="Modo de aplicación">
+            <button
+              type="button"
+              className={`app-mode-tab ${appMode === "flow" ? "active" : ""}`}
+              onClick={() => setAppMode("flow")}
+              title="Flujo visual interactivo de pipelines (KNIME)"
+            >
+              ⚡ Flujos (8100)
+            </button>
+            <button
+              type="button"
+              className={`app-mode-tab ${appMode === "report" ? "active" : ""}`}
+              onClick={() => setAppMode("report")}
+              title="Reporteador clínico y analítico (Pipeline TCGA v3)"
+            >
+              📊 Reporteador v3 (8000)
+            </button>
+          </nav>
+          {appMode === "flow" && selectedWorkflow && (
             <div className="active-workflow-badge" title={selectedWorkflow.description ?? ""}>
               <span className="badge-dot" />
               <div className="badge-text">
@@ -370,53 +389,70 @@ function FlowApp() {
             </div>
           )}
         </div>
-        <div className="toolbar">
-          <button onClick={executeAll} disabled={!workflow || busy || running}>
-            Ejecutar todo
-          </button>
-          <button onClick={executeNode} disabled={!selectedId || busy || running}>
-            Ejecutar nodo
-          </button>
-          <button onClick={executeUntil} disabled={!selectedId || busy || running}>
-            Ejecutar hasta aquí
-          </button>
-          <button className="danger" onClick={cancel} disabled={!running}>
-            Cancelar
-          </button>
-          <button onClick={resetNode} disabled={!selectedId || busy}>
-            Reset nodo
-          </button>
-          <button onClick={resetAll} disabled={!workflow || busy}>
-            Reset todo
-          </button>
-          <span className="separator" />
-          {workflow && (
-            <>
-              <a className="button" href={api.exportJsonUrl(workflow.id)} download>
-                JSON
-              </a>
-              <a className="button" href={api.exportMermaidUrl(workflow.id)} download>
-                Mermaid
-              </a>
-              <button onClick={exportPng}>PNG</button>
-            </>
-          )}
-          <span className="separator" />
-          <button
-            className={`panel-toggle-btn${collapseLeft ? " active" : ""}`}
-            onClick={() => setCollapseLeft((val) => !val)}
-            title="Ocultar o mostrar panel izquierdo"
-          >
-            {collapseLeft ? "⊞ Panel Izq" : "⊟ Panel Izq"}
-          </button>
-          <button
-            className={`panel-toggle-btn${collapseRight ? " active" : ""}`}
-            onClick={() => setCollapseRight((val) => !val)}
-            title="Ocultar o mostrar panel derecho"
-          >
-            {collapseRight ? "⊞ Panel Der" : "⊟ Panel Der"}
-          </button>
-        </div>
+        {appMode === "flow" ? (
+          <div className="toolbar">
+            <button onClick={executeAll} disabled={!workflow || busy || running}>
+              Ejecutar todo
+            </button>
+            <button onClick={executeNode} disabled={!selectedId || busy || running}>
+              Ejecutar nodo
+            </button>
+            <button onClick={executeUntil} disabled={!selectedId || busy || running}>
+              Ejecutar hasta aquí
+            </button>
+            <button className="danger" onClick={cancel} disabled={!running}>
+              Cancelar
+            </button>
+            <button onClick={resetNode} disabled={!selectedId || busy}>
+              Reset nodo
+            </button>
+            <button onClick={resetAll} disabled={!workflow || busy}>
+              Reset todo
+            </button>
+            <span className="separator" />
+            {workflow && (
+              <>
+                <a className="button" href={api.exportJsonUrl(workflow.id)} download>
+                  JSON
+                </a>
+                <a className="button" href={api.exportMermaidUrl(workflow.id)} download>
+                  Mermaid
+                </a>
+                <button onClick={exportPng}>PNG</button>
+              </>
+            )}
+            <span className="separator" />
+            <button
+              className={`panel-toggle-btn${collapseLeft ? " active" : ""}`}
+              onClick={() => setCollapseLeft((val) => !val)}
+              title="Ocultar o mostrar panel izquierdo"
+            >
+              {collapseLeft ? "⊞ Panel Izq" : "⊟ Panel Izq"}
+            </button>
+            <button
+              className={`panel-toggle-btn${collapseRight ? " active" : ""}`}
+              onClick={() => setCollapseRight((val) => !val)}
+              title="Ocultar o mostrar panel derecho"
+            >
+              {collapseRight ? "⊞ Panel Der" : "⊟ Panel Der"}
+            </button>
+          </div>
+        ) : (
+          <div className="toolbar">
+            <span style={{ fontSize: "12px", color: "var(--muted)" }}>
+              Reporteador clínico · puerto 8000
+            </span>
+            <a
+              className="button"
+              href="http://localhost:8000/"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Abrir reporteador v3 en ventana externa"
+            >
+              ↗ Abrir en ventana nueva
+            </a>
+          </div>
+        )}
       </header>
 
       {runtime && runtime.execution !== "idle" && (
@@ -428,84 +464,94 @@ function FlowApp() {
         </div>
       )}
 
-      <div className={`layout${collapseLeft ? " left-collapsed" : ""}${collapseRight ? " right-collapsed" : ""}`}>
-        <LeftPanel
-          workflows={config?.workflows ?? []}
-          activeId={activeId}
-          onSelect={setActiveId}
-          catalog={catalog}
-          collapsed={collapseLeft}
-          onToggleCollapse={() => setCollapseLeft((val) => !val)}
-        />
-
-        <main
-          className="flow-canvas"
-          ref={wrapper}
-          onDragOver={(event) => {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "copy";
-          }}
-          onDrop={onDrop}
-        >
-          {workflow ? (
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              onNodesChange={onNodesChange}
-              onNodeClick={(_event, node) => {
-                if (node.type === "etl") setSelectedId(node.id);
-              }}
-              onNodeDragStop={onNodeDragStop}
-              onConnect={onConnect}
-              onEdgesDelete={onEdgesDelete}
-              onNodesDelete={onNodesDelete}
-              deleteKeyCode={["Backspace", "Delete"]}
-              fitView
-              minZoom={0.25}
-              maxZoom={1.6}
-              proOptions={{ hideAttribution: false }}
-            >
-              <Background gap={24} size={1} color="#e2e8f0" />
-              <Controls />
-              <MiniMap
-                pannable
-                zoomable
-                nodeColor={(node) => {
-                  const data = node.data as { color?: string };
-                  return data.color ?? "#94a3b8";
-                }}
-              />
-            </ReactFlow>
-          ) : (
-            <div className="empty-canvas">
-              <p>Cargando workflow…</p>
-            </div>
-          )}
-          <div className="legend">
-            {Object.entries(LAYER_COLORS).map(([layer, color]) => (
-              <span key={layer}>
-                <i style={{ background: color }} /> {layer}
-              </span>
-            ))}
-          </div>
-        </main>
-
-        {!collapseRight && (
-          <RightPanel
-            workflow={workflow ?? { id: "", name: "", version: 0, description: "", project_id: "", variables: {}, nodes: [], edges: [] }}
-            node={selectedNode}
-            catalog={selectedCatalog}
-            runtime={selectedRuntime}
-            liveLogs={liveLogs}
-            onWorkflowChange={setWorkflow}
-            onRuntimeRefresh={() => activeId && void refreshRuntime(activeId)}
-            onDeleteNode={deleteNode}
-            onNotice={showNotice}
-            onToggleCollapse={() => setCollapseRight(true)}
+      {appMode === "flow" ? (
+        <div className={`layout${collapseLeft ? " left-collapsed" : ""}${collapseRight ? " right-collapsed" : ""}`}>
+          <LeftPanel
+            workflows={config?.workflows ?? []}
+            activeId={activeId}
+            onSelect={setActiveId}
+            catalog={catalog}
+            collapsed={collapseLeft}
+            onToggleCollapse={() => setCollapseLeft((val) => !val)}
           />
-        )}
-      </div>
+
+          <main
+            className="flow-canvas"
+            ref={wrapper}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={onDrop}
+          >
+            {workflow ? (
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                onNodesChange={onNodesChange}
+                onNodeClick={(_event, node) => {
+                  if (node.type === "etl") setSelectedId(node.id);
+                }}
+                onNodeDragStop={onNodeDragStop}
+                onConnect={onConnect}
+                onEdgesDelete={onEdgesDelete}
+                onNodesDelete={onNodesDelete}
+                deleteKeyCode={["Backspace", "Delete"]}
+                fitView
+                minZoom={0.25}
+                maxZoom={1.6}
+                proOptions={{ hideAttribution: false }}
+              >
+                <Background gap={24} size={1} color="#e2e8f0" />
+                <Controls />
+                <MiniMap
+                  pannable
+                  zoomable
+                  nodeColor={(node) => {
+                    const data = node.data as { color?: string };
+                    return data.color ?? "#94a3b8";
+                  }}
+                />
+              </ReactFlow>
+            ) : (
+              <div className="empty-canvas">
+                <p>Cargando workflow…</p>
+              </div>
+            )}
+            <div className="legend">
+              {Object.entries(LAYER_COLORS).map(([layer, color]) => (
+                <span key={layer}>
+                  <i style={{ background: color }} /> {layer}
+                </span>
+              ))}
+            </div>
+          </main>
+
+          {!collapseRight && (
+            <RightPanel
+              workflow={workflow ?? { id: "", name: "", version: 0, description: "", project_id: "", variables: {}, nodes: [], edges: [] }}
+              node={selectedNode}
+              catalog={selectedCatalog}
+              runtime={selectedRuntime}
+              liveLogs={liveLogs}
+              onWorkflowChange={setWorkflow}
+              onRuntimeRefresh={() => activeId && void refreshRuntime(activeId)}
+              onDeleteNode={deleteNode}
+              onNotice={showNotice}
+              onToggleCollapse={() => setCollapseRight(true)}
+            />
+          )}
+        </div>
+      ) : (
+        <div className="report-container">
+          <iframe
+            src="http://localhost:8000/"
+            title="TCGA Medallion Reportes"
+            className="report-iframe"
+          />
+        </div>
+      )}
 
       {notice && (
         <div className={`toast${notice.error ? " error" : ""}`}>{notice.message}</div>
