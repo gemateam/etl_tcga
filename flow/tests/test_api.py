@@ -27,7 +27,7 @@ def test_health(client):
 
 def test_config_lists_workflows(client):
     payload = client.get("/api/flow/config").json()
-    assert sorted([item["id"] for item in payload["workflows"]]) == ["gemamx_v1", "gemamx_v2", "tcga_v3"]
+    assert sorted([item["id"] for item in payload["workflows"]]) == ["gemamx_v1", "gemamx_v2", "gemamx_v2_1", "tcga_v3"]
     assert payload["layers"][0]["color"] == "#0f766e"
     assert payload["states"]["executed"] == "#15803d"
 
@@ -37,7 +37,7 @@ def test_catalog_has_tcga_nodes(client):
     keys = {item["key"] for item in payload["nodes"]}
     assert "gold_marker_genes" in keys
     assert "gold_cx_pivot" in keys
-    assert len(keys) == 44  # 18 TCGA + 18 GEMAMX-v2 granular + 8 GEMAMX-v1
+    assert len(keys) == 47  # 18 TCGA + 18 GEMAMX-v2 granular + 8 GEMAMX-v1 + 3 GEMAMX-v2.1
 
 
 def test_workflow_detail(client):

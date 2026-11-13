@@ -451,6 +451,46 @@ _OUT_PARQUET = Port(name="parquet", kind=PortKind.PARQUET)
 _OUT_TABLE = Port(name="tabla", kind=PortKind.TABLE)
 
 
+def _run_read_moesm4_clinical(_params: Any, ctx: RunContext) -> RunResult:
+    from .gemamx.v2_1 import read_moesm4_clinical
+
+    gemamx_dir = Path(getattr(ctx.settings, "gemamx_data_dir", "D:/RespaldoLaptopHP/ProyectosIA/GEMAMX"))
+    data_dir = ctx.settings.etl.data_dir
+    res = read_moesm4_clinical(gemamx_dir, data_dir)
+    return RunResult(
+        rows_in=res["total_samples"],
+        rows_out=res["total_samples"],
+        outputs=[res["parquet_file"]],
+        detail=res,
+    )
+
+
+def _run_normalize_clinical_metadata(_params: Any, ctx: RunContext) -> RunResult:
+    from .gemamx.v2_1 import normalize_clinical_metadata
+
+    data_dir = ctx.settings.etl.data_dir
+    res = normalize_clinical_metadata(data_dir)
+    return RunResult(
+        rows_in=res["normalized_samples"],
+        rows_out=res["normalized_samples"],
+        outputs=[res["parquet_file"]],
+        detail=res,
+    )
+
+
+def _run_compute_variant_clinical_summary(_params: Any, ctx: RunContext) -> RunResult:
+    from .gemamx.v2_1 import compute_variant_clinical_summary
+
+    data_dir = ctx.settings.etl.data_dir
+    res = compute_variant_clinical_summary(data_dir)
+    return RunResult(
+        rows_in=res["variants_summarized"],
+        rows_out=res["variants_summarized"],
+        outputs=[res["parquet_file"], res["json_file"], res["csv_file"]],
+        detail=res,
+    )
+
+
 NODE_TYPES: dict[str, NodeType] = {
     # ----------------------------------------------------------------- landing
     "extract_cases": NodeType(
@@ -1030,6 +1070,46 @@ NODE_TYPES: dict[str, NodeType] = {
         ),
         param_model=EmptyParams,
         run=_run_generate_v1_fasta_variants,
+    ),
+    "knime_v2_1_moesm4_reader": NodeType(
+        key="knime_v2_1_moesm4_reader",
+        layer=Layer.BRONZE,
+        label="Excel Reader (MOESM4 Clinical)",
+        description="Lee la hoja 'Features' de MOESM4 con metadatos clínicos (204 muestras: edad, IHC, PAM50, grado SBR).",
+        inputs=(),
+        outputs=(_OUT_PARQUET,),
+        output_specs=(
+            _parquet("parquet", "MOESM4 Clinical Raw Parquet", "gemamx/v2_1/bronze/romero_clinical_raw.parquet"),
+        ),
+        param_model=EmptyParams,
+        run=_run_read_moesm4_clinical,
+    ),
+    "knime_v2_1_clinical_normalize": NodeType(
+        key="knime_v2_1_clinical_normalize",
+        layer=Layer.SILVER,
+        label="Clinical Normalizer (IHC · PAM50 · SBR)",
+        description="Estandariza edad (<50 Younger, >=50 Older), subtipo IHC, PAM50 y grado histológico SBR.",
+        inputs=(_IN_PARQUET,),
+        outputs=(_OUT_PARQUET,),
+        output_specs=(
+            _parquet("parquet", "Clinical Metadata Parquet", "gemamx/v2_1/silver/clinical_metadata.parquet"),
+        ),
+        param_model=EmptyParams,
+        run=_run_normalize_clinical_metadata,
+    ),
+    "knime_v2_1_variant_clinical_summary": NodeType(
+        key="knime_v2_1_variant_clinical_summary",
+        layer=Layer.GOLD,
+        label="variant_clinical_summary (M5b Enriquecimiento)",
+        description="Cruza mutaciones con metadatos clínicos generando el perfil clínico por variante priorizada.",
+        inputs=(_IN_PARQUET,),
+        outputs=(_OUT_PARQUET,),
+        output_specs=(
+            _parquet("parquet", "Variant Clinical Summary Parquet", "gemamx/v2_1/gold/variant_clinical_summary.parquet"),
+            _json("json", "Variant Clinical Summary JSON", "gemamx/v2_1/gold/variant_clinical_summary.json"),
+        ),
+        param_model=EmptyParams,
+        run=_run_compute_variant_clinical_summary,
     ),
 }
 

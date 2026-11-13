@@ -1,0 +1,373 @@
+{
+  "id": "gemamx_v2_1",
+  "name": "GEMAMX v2.1 · Romero-Córdoba 2021 (Ingestión + Clínico M5)",
+  "version": 1,
+  "description": "Pipeline de preparación de insumos de GEMAMX V2.1 (Romero-Córdoba 2021 HM): ingesta y normalización de MAF (MOESM8) y Drivers (MOESM9), priorización de 49 variantes diana y enriquecimiento con metadatos clínicos (MOESM4 M5a/M5b: edad, subtipo IHC, PAM50 y grado SBR).",
+  "project_id": null,
+  "variables": {
+    "dataset": "Romero-Cordoba 2021 HM",
+    "cohort_size": 134,
+    "clinical_samples": 204,
+    "doi": "10.1038/s41467-021-22478-y"
+  },
+  "nodes": [
+    {
+      "id": "moesm8_reader",
+      "type": "knime_v2_moesm8_reader",
+      "label": "Excel Reader (MOESM8 MAF)",
+      "layer": "bronze",
+      "position": {
+        "x": 40.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "1.1 · Lee la hoja 'HM maf' de MOESM8 (28 114 variantes, 134 pacientes).",
+      "status": "confirmed",
+      "description": "Lee el suplementario MOESM8 MAF a Parquet."
+    },
+    {
+      "id": "moesm8_key",
+      "type": "knime_v2_moesm8_key",
+      "label": "String Manip. (clave MAF)",
+      "layer": "bronze",
+      "position": {
+        "x": 346.52117761446056,
+        "y": 41.72087796877594
+      },
+      "params": {},
+      "notes": "1.2 · Crea clave compuesta gen#chr#pos#ref#alt en el MAF.",
+      "status": "confirmed",
+      "description": "Genera clave compuesta para el join."
+    },
+    {
+      "id": "moesm9_reader",
+      "type": "knime_v2_moesm9_reader",
+      "label": "Excel Reader (MOESM9 drivers)",
+      "layer": "bronze",
+      "position": {
+        "x": 40.0,
+        "y": 180.0
+      },
+      "params": {},
+      "notes": "1.3 · Lee la hoja 'Driver mutation in HM' (127 variantes driver).",
+      "status": "confirmed",
+      "description": "Lee el suplementario MOESM9 a Parquet."
+    },
+    {
+      "id": "moesm9_regex",
+      "type": "knime_v2_moesm9_regex",
+      "label": "Regex Extractor (chr·pos·ref·alt)",
+      "layer": "bronze",
+      "position": {
+        "x": 331.6641021791528,
+        "y": 395.53480454938926
+      },
+      "params": {},
+      "notes": "1.4 · Parsea notación chrN:g.POSref>alt a columnas estructuradas.",
+      "status": "confirmed",
+      "description": "Extrae coordenadas genómicas de la notación gdna."
+    },
+    {
+      "id": "moesm9_key",
+      "type": "knime_v2_moesm9_key",
+      "label": "String Manip. (clave drivers)",
+      "layer": "bronze",
+      "position": {
+        "x": 365.8044354725025,
+        "y": 197.9196548576894
+      },
+      "params": {},
+      "notes": "1.5 · Crea clave compuesta gen#chr#pos#ref#alt en drivers.",
+      "status": "confirmed",
+      "description": "Genera clave compuesta de drivers para el join."
+    },
+    {
+      "id": "joiner",
+      "type": "knime_v2_joiner",
+      "label": "Joiner (Left Outer Join)",
+      "layer": "silver",
+      "position": {
+        "x": 664.0098284476554,
+        "y": 52.68835118751038
+      },
+      "params": {},
+      "notes": "1.6 · Cruza MAF × drivers; 167 mutaciones cruzan con driver status.",
+      "status": "confirmed",
+      "description": "Left Outer Join conservando las 28 114 variantes del MAF."
+    },
+    {
+      "id": "regex_prot",
+      "type": "knime_v2_regex_prot",
+      "label": "Regex Extractor (p.His1047Arg)",
+      "layer": "silver",
+      "position": {
+        "x": 774.3350962603112,
+        "y": 224.5120982810165
+      },
+      "params": {},
+      "notes": "2.1 · Extrae cambio proteico eliminando prefijo 'p.'.",
+      "status": "confirmed",
+      "description": "Extrae la cadena proteica cruda."
+    },
+    {
+      "id": "cell_replacer",
+      "type": "knime_v2_cell_replacer",
+      "label": "Cell Replacer (3 → 1 letra aa)",
+      "layer": "silver",
+      "position": {
+        "x": 720.1482657919503,
+        "y": 440.2057382494604
+      },
+      "params": {},
+      "notes": "2.2 · Traduce códigos de 3 letras a letra única estándar (His->H, Arg->R).",
+      "status": "confirmed",
+      "description": "Conversión de nomenclatura de aminoácidos."
+    },
+    {
+      "id": "string_manip_pchange",
+      "type": "knime_v2_string_manip_pchange",
+      "label": "String Manip. (H1047R)",
+      "layer": "silver",
+      "position": {
+        "x": 722.0174095526766,
+        "y": 723.9891077842138
+      },
+      "params": {},
+      "notes": "2.3 · Consolida protein_change normalizado y exporta silver unificado (GRCh37).",
+      "status": "confirmed",
+      "description": "Genera la tabla silver normalizada de mutaciones."
+    },
+    {
+      "id": "ref_row_filter",
+      "type": "knime_v2_ref_row_filter",
+      "label": "Ref. Row Filter (15 genes clave)",
+      "layer": "gold",
+      "position": {
+        "x": 1072.4084800420749,
+        "y": 63.655824406244804
+      },
+      "params": {},
+      "notes": "3.1 · Filtra exclusivamente los 15 genes diana del proyecto (Tier 1-3).",
+      "status": "confirmed",
+      "description": "Filtro de genes clave."
+    },
+    {
+      "id": "row_filter_missense",
+      "type": "knime_v2_row_filter_missense",
+      "label": "Row Filter (solo missense)",
+      "layer": "gold",
+      "position": {
+        "x": 1347.2458461357471,
+        "y": 89.24659524995849
+      },
+      "params": {},
+      "notes": "3.2 · Retiene solo variantes con Variant_Classification = 'Missense_Mutation'.",
+      "status": "confirmed",
+      "description": "Filtro por tipo de mutación."
+    },
+    {
+      "id": "row_filter_resolved",
+      "type": "knime_v2_row_filter_resolved",
+      "label": "Row Filter (cambio resuelto)",
+      "layer": "gold",
+      "position": {
+        "x": 1375.9243688756019,
+        "y": 228.1679226872613
+      },
+      "params": {},
+      "notes": "3.3 · Descarta variantes sin protein_change resuelto.",
+      "status": "confirmed",
+      "description": "Filtro de cambio proteico válido."
+    },
+    {
+      "id": "groupby",
+      "type": "knime_v2_groupby",
+      "label": "GroupBy (gen + cambio)",
+      "layer": "gold",
+      "position": {
+        "x": 1363.170215011349,
+        "y": 443.86156265570514
+      },
+      "params": {},
+      "notes": "3.4 · Agrupa por gen y variante, contando pacientes únicos.",
+      "status": "confirmed",
+      "description": "Cálculo de frecuencia de variantes."
+    },
+    {
+      "id": "math_formula",
+      "type": "knime_v2_math_formula",
+      "label": "Math Formula (÷ 134 × 100)",
+      "layer": "gold",
+      "position": {
+        "x": 1421.095333001162,
+        "y": 620.8643943247248
+      },
+      "params": {},
+      "notes": "3.5 · Porcentaje de la cohorte sobre N=134.",
+      "status": "confirmed",
+      "description": "Cálculo de cohort_percentage."
+    },
+    {
+      "id": "rule_engine",
+      "type": "knime_v2_rule_engine",
+      "label": "Rule Engine (5% · 1% · 0.5%)",
+      "layer": "gold",
+      "position": {
+        "x": 1805.607431282179,
+        "y": 184.29802981232356
+      },
+      "params": {},
+      "notes": "3.6 · Clasificación por umbrales: Patogénica, Probable Patogénica, VUS, Baja Frecuencia.",
+      "status": "confirmed",
+      "description": "Motor de reglas clínicas."
+    },
+    {
+      "id": "sorter_top_variants",
+      "type": "knime_v2_sorter",
+      "label": "Sorter → CSV (top_variants · 49)",
+      "layer": "gold",
+      "position": {
+        "x": 1800.7742302981228,
+        "y": 364.6520338537342
+      },
+      "params": {},
+      "notes": "3.7 · Ordena por freq DESC, asigna rank y persiste top_variants (49 variantes).",
+      "status": "confirmed",
+      "description": "Insumo Gold 1: top_variants ranking."
+    },
+    {
+      "id": "mutation_stats",
+      "type": "knime_v2_mutation_stats",
+      "label": "mutation_stats (distribuciones por gen)",
+      "layer": "gold",
+      "position": {
+        "x": 1074.8456963129047,
+        "y": 234.83736609367216
+      },
+      "params": {},
+      "notes": "Insumo Gold 2 · Distribución por gen (top 20) y por tipo de variante (28 114 variantes).",
+      "status": "confirmed",
+      "description": "Insumo Gold 2: mutation_stats global."
+    },
+    {
+      "id": "moesm4_reader",
+      "type": "knime_v2_1_moesm4_reader",
+      "label": "Excel Reader (MOESM4 Clinical)",
+      "layer": "bronze",
+      "position": {
+        "x": 40.0,
+        "y": 300.0
+      },
+      "params": {},
+      "notes": "M5a · Lee la hoja Features de MOESM4 (204 muestras con edad, subtipo IHC, PAM50, grado SBR).",
+      "status": "confirmed",
+      "description": "Lector de metadatos clínicos crudos de Romero."
+    },
+    {
+      "id": "clinical_normalize",
+      "type": "knime_v2_1_clinical_normalize",
+      "label": "Clinical Normalizer (IHC · PAM50 · SBR)",
+      "layer": "silver",
+      "position": {
+        "x": 700.0,
+        "y": 300.0
+      },
+      "params": {},
+      "notes": "M5a · Normaliza grupos de edad, clasificaciones IHC, PAM50 y grado histológico.",
+      "status": "confirmed",
+      "description": "Normalización de tabla clínica por paciente."
+    },
+    {
+      "id": "variant_clinical_summary",
+      "type": "knime_v2_1_variant_clinical_summary",
+      "label": "variant_clinical_summary (M5b)",
+      "layer": "gold",
+      "position": {
+        "x": 2900.0,
+        "y": 60.0
+      },
+      "params": {},
+      "notes": "M5b · Enriquecimiento clínico: edad media, subtipo predominante, PAM50 y grado SBR por variante priorizada.",
+      "status": "confirmed",
+      "description": "Insumo Gold enriquecido con perfiles clínicos."
+    }
+  ],
+  "edges": [
+    {
+      "source": "moesm8_reader",
+      "target": "moesm8_key"
+    },
+    {
+      "source": "moesm9_reader",
+      "target": "moesm9_regex"
+    },
+    {
+      "source": "moesm9_regex",
+      "target": "moesm9_key"
+    },
+    {
+      "source": "moesm8_key",
+      "target": "joiner"
+    },
+    {
+      "source": "moesm9_key",
+      "target": "joiner"
+    },
+    {
+      "source": "joiner",
+      "target": "regex_prot"
+    },
+    {
+      "source": "regex_prot",
+      "target": "cell_replacer"
+    },
+    {
+      "source": "cell_replacer",
+      "target": "string_manip_pchange"
+    },
+    {
+      "source": "string_manip_pchange",
+      "target": "ref_row_filter"
+    },
+    {
+      "source": "string_manip_pchange",
+      "target": "mutation_stats"
+    },
+    {
+      "source": "ref_row_filter",
+      "target": "row_filter_missense"
+    },
+    {
+      "source": "row_filter_missense",
+      "target": "row_filter_resolved"
+    },
+    {
+      "source": "row_filter_resolved",
+      "target": "groupby"
+    },
+    {
+      "source": "groupby",
+      "target": "math_formula"
+    },
+    {
+      "source": "math_formula",
+      "target": "rule_engine"
+    },
+    {
+      "source": "rule_engine",
+      "target": "sorter_top_variants"
+    },
+    {
+      "source": "moesm4_reader",
+      "target": "clinical_normalize"
+    },
+    {
+      "source": "clinical_normalize",
+      "target": "variant_clinical_summary"
+    },
+    {
+      "source": "sorter_top_variants",
+      "target": "variant_clinical_summary"
+    }
+  ]
+}

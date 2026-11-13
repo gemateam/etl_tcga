@@ -7,7 +7,7 @@ from tcga_flow.runner import main as runner_main
 
 
 def test_catalog_is_closed_and_complete():
-    assert len(catalog.NODE_TYPES) == 44  # 18 TCGA + 18 GEMAMX-v2 granular + 8 GEMAMX-v1
+    assert len(catalog.NODE_TYPES) == 47  # 18 TCGA + 18 GEMAMX-v2 granular + 8 GEMAMX-v1 + 3 GEMAMX-v2.1
     for key, node_type in catalog.NODE_TYPES.items():
         assert key == node_type.key
         schema = node_type.param_model.model_json_schema()
