@@ -389,24 +389,34 @@ footer a { color: var(--brand); }
 .record-details .kv dd { min-width: 0; overflow-wrap: anywhere; }
 
 /* En el reporte ampliado, las secciones desplegables deben ocupar el 100% del ancho del card */
-.case-report .record-details {
-  max-width: 100%;
-  width: 100%;
+.case-report details.record-details,
+section.case-report .record-details {
+  max-width: 100% !important;
+  width: 100% !important;
+  display: block;
 }
-.case-report .record-details .table {
-  width: 100%;
-  min-width: 620px;
-}
-.case-report .record-details .table th,
-.case-report .record-details .table td {
-  padding: 8px 12px;
-}
-.case-report .table-scroll {
-  width: 100%;
-  margin-bottom: 16px;
+.case-report details.record-details > div.table-scroll,
+section.case-report .table-scroll {
+  max-width: 100% !important;
+  width: 100% !important;
+  margin-top: 8px;
+  margin-bottom: 20px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: #ffffff;
+  overflow-x: auto;
+}
+.case-report .table {
+  width: 100% !important;
+  min-width: 100%;
+  table-layout: auto;
+}
+.case-report .table th,
+.case-report .table td {
+  padding: 9px 14px;
+}
+.case-report .table th {
+  background: #f8fafc;
 }
 .file-name-cell { max-width: 240px; overflow-wrap: anywhere; word-break: break-word; }
 .expr-table td, .expr-table th { white-space: nowrap; }
