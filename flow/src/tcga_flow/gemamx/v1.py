@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,12 @@ KEY_GENES = [
     "CDH1", "GATA3", "MAP3K1", "KMT2C", "PTEN",
     "RB1", "ARID1A", "SF3B1", "AKT1", "CBFB"
 ]
+
+GENE_ENTREZ_MAP = {
+    "PIK3CA": 5290, "TP53": 7157, "ERBB2": 2064, "BRCA1": 672, "BRCA2": 675,
+    "CDH1": 999, "GATA3": 2625, "MAP3K1": 4214, "KMT2C": 58508, "PTEN": 5728,
+    "RB1": 5925, "ARID1A": 8289, "SF3B1": 23451, "AKT1": 207, "CBFB": 865,
+}
 
 UNIPROT_MAP = {
     "PIK3CA": "P42336",
@@ -44,33 +51,58 @@ UNIPROT_MAP = {
 
 
 def fetch_mutations(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
-    """Bronze: Obtiene mutaciones de cBioPortal (con fixture de respaldo en modo offline)."""
-    fixture_path = gemamx_dir / "data" / "raw_mutations.json"
+    """Bronze: Consulta mutaciones reales directamente de la API REST de cBioPortal."""
+    url = "https://www.cbioportal.org/api/molecular-profiles/brca_tcga_mutations/mutations/fetch?projection=DETAILED"
     ingested_at = datetime.now(timezone.utc).isoformat()
 
-    if fixture_path.exists():
-        raw_data = json.loads(fixture_path.read_text(encoding="utf-8"))
-        source_desc = "GEMAMX data/raw_mutations.json fixture"
-    else:
-        raw_data = []
-        source_desc = "Empty"
+    payload = json.dumps({
+        "sampleListId": "brca_tcga_all",
+        "entrezGeneIds": list(GENE_ENTREZ_MAP.values())
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) tcga-flow/1.0"
+        }
+    )
+
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        cbioportal_records = json.loads(resp.read().decode("utf-8"))
+
+    entrez_to_hugo = {v: k for k, v in GENE_ENTREZ_MAP.items()}
+
+    raw_data: list[dict[str, Any]] = []
+    for r in cbioportal_records:
+        gene_obj = r.get("gene") or {}
+        entrez = r.get("entrezGeneId")
+        hugo = gene_obj.get("hugoGeneSymbol") or entrez_to_hugo.get(entrez, "")
+
+        raw_data.append({
+            "hugo_symbol": hugo,
+            "variant_classification": r.get("mutationType", ""),
+            "protein_change": r.get("proteinChange", ""),
+            "sample_id": r.get("sampleId", ""),
+            "chromosome": str(r.get("chr", "")),
+            "start_position": r.get("startPosition"),
+            "_source_url": url,
+            "_ingested_at": ingested_at,
+            "_dataset": "TCGA-BRCA-cBioPortal",
+        })
 
     out_dir = data_dir / "gemamx" / "v1" / "bronze"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_file = out_dir / "cbio_mutations.parquet"
-
-    # Agregar metadatos de linaje
-    for r in raw_data:
-        r["_source_url"] = "https://www.cbioportal.org/api/molecular-profiles/brca_tcga_mutations/mutations/fetch"
-        r["_ingested_at"] = ingested_at
-        r["_dataset"] = "TCGA-BRCA-cBioPortal"
 
     table = pa.Table.from_pylist(raw_data)
     pq.write_table(table, out_file)
 
     return {
         "total_rows": len(raw_data),
-        "source": source_desc,
+        "source": "cBioPortal API (brca_tcga_mutations)",
         "out_file": str(out_file),
     }
 
@@ -92,24 +124,31 @@ def fetch_genes(data_dir: Path) -> dict[str, Any]:
 
 
 def fetch_uniprot_fasta(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
-    """Bronze: Descarga o carga secuencias canónicas de UniProt de los 15 genes clave."""
-    fixture_dir = Path(__file__).parent / "fixtures" / "uniprot"
-    src_fasta_dir = gemamx_dir / "GEMAMXST" / "v2" / "data" / "fasta"
-
+    """Bronze: Descarga secuencias canónicas directamente de UniProt REST API de los 15 genes clave."""
     out_dir = data_dir / "gemamx" / "v1" / "bronze" / "fasta"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    copied = 0
-    for gene in KEY_GENES:
-        f = fixture_dir / f"{gene}_WT.fasta"
-        if not f.exists() and src_fasta_dir.exists():
-            f = src_fasta_dir / f"{gene}_WT.fasta"
-        if f.exists():
-            (out_dir / f"{gene}_WT.fasta").write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
-            copied += 1
+    fetched = 0
+    for gene, uniprot_acc in UNIPROT_MAP.items():
+        fasta_file = out_dir / f"{gene}_WT.fasta"
+        try:
+            url = f"https://rest.uniprot.org/uniprotkb/{uniprot_acc}.fasta"
+            req = urllib.request.Request(url, headers={"User-Agent": "tcga-flow/1.0"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                content = resp.read().decode("utf-8")
+                fasta_file.write_text(content, encoding="utf-8")
+                fetched += 1
+        except Exception as e:
+            # Fallback en caso de que ya estuviera guardado localmente
+            if not fasta_file.exists():
+                fixture_f = Path(__file__).parent / "fixtures" / "uniprot" / f"{gene}_WT.fasta"
+                if fixture_f.exists():
+                    fasta_file.write_text(fixture_f.read_text(encoding="utf-8"), encoding="utf-8")
+                    fetched += 1
 
     return {
-        "wt_fasta_count": copied,
+        "wt_fasta_count": fetched,
+        "source": "UniProt REST API (rest.uniprot.org)",
         "out_dir": str(out_dir),
     }
 

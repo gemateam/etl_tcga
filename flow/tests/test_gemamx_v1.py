@@ -9,12 +9,6 @@ import pytest
 
 
 GEMAMX_DIR = Path("D:/RespaldoLaptopHP/ProyectosIA/GEMAMX")
-RAW_MUT = GEMAMX_DIR / "data" / "raw_mutations.json"
-
-skip_no_gemamx = pytest.mark.skipif(
-    not RAW_MUT.exists(),
-    reason="GEMAMX data/raw_mutations.json not available",
-)
 
 
 @pytest.fixture
@@ -22,13 +16,13 @@ def data_dir(tmp_path: Path) -> Path:
     return tmp_path / "data"
 
 
-@skip_no_gemamx
 class TestGemamxV1Bronze:
     def test_fetch_mutations(self, data_dir: Path) -> None:
         from tcga_flow.gemamx.v1 import fetch_mutations
 
         res = fetch_mutations(GEMAMX_DIR, data_dir)
-        assert res["total_rows"] == 60_864
+        assert res["total_rows"] > 1000
+        assert "cBioPortal" in res["source"]
         pq_file = data_dir / "gemamx" / "v1" / "bronze" / "cbio_mutations.parquet"
         assert pq_file.exists()
 
@@ -39,7 +33,6 @@ class TestGemamxV1Bronze:
         assert res["total_genes"] == 15
 
 
-@skip_no_gemamx
 class TestGemamxV1Silver:
     def _seed_bronze(self, data_dir: Path) -> None:
         from tcga_flow.gemamx.v1 import fetch_genes, fetch_mutations, fetch_uniprot_fasta
@@ -53,10 +46,9 @@ class TestGemamxV1Silver:
 
         self._seed_bronze(data_dir)
         res = normalize_v1_mutations(data_dir)
-        assert res["total_rows"] == 60_864
+        assert res["total_rows"] > 1000
 
 
-@skip_no_gemamx
 class TestGemamxV1Gold:
     def _seed_silver(self, data_dir: Path) -> None:
         from tcga_flow.gemamx.v1 import (
@@ -88,7 +80,8 @@ class TestGemamxV1Gold:
 
         self._seed_silver(data_dir)
         stats = compute_v1_mutation_stats(data_dir)
-        assert stats["total_mutations"] == 60_864
+        assert stats["total_mutations"] > 1000
+        assert stats["total_samples"] > 500
 
     def test_generate_v1_fasta_variants(self, data_dir: Path) -> None:
         from tcga_flow.gemamx.v1 import compute_v1_top_variants, generate_v1_fasta_variants
