@@ -17,8 +17,8 @@
       "label": "Excel Reader (MOESM8 MAF)",
       "layer": "bronze",
       "position": {
-        "x": 40.0,
-        "y": 60.0
+        "x": 40,
+        "y": 60
       },
       "params": {},
       "notes": "1.1 · Lee la hoja 'HM maf' de MOESM8 (28 114 variantes, 134 pacientes).",
@@ -31,8 +31,8 @@
       "label": "String Manip. (clave MAF)",
       "layer": "bronze",
       "position": {
-        "x": 346.52117761446056,
-        "y": 41.72087796877594
+        "x": 350,
+        "y": 60
       },
       "params": {},
       "notes": "1.2 · Crea clave compuesta gen#chr#pos#ref#alt en el MAF.",
@@ -45,8 +45,8 @@
       "label": "Excel Reader (MOESM9 drivers)",
       "layer": "bronze",
       "position": {
-        "x": 40.0,
-        "y": 180.0
+        "x": 40,
+        "y": 240
       },
       "params": {},
       "notes": "1.3 · Lee la hoja 'Driver mutation in HM' (127 variantes driver).",
@@ -59,8 +59,8 @@
       "label": "Regex Extractor (chr·pos·ref·alt)",
       "layer": "bronze",
       "position": {
-        "x": 331.6641021791528,
-        "y": 395.53480454938926
+        "x": 350,
+        "y": 360
       },
       "params": {},
       "notes": "1.4 · Parsea notación chrN:g.POSref>alt a columnas estructuradas.",
@@ -73,8 +73,8 @@
       "label": "String Manip. (clave drivers)",
       "layer": "bronze",
       "position": {
-        "x": 365.8044354725025,
-        "y": 197.9196548576894
+        "x": 350,
+        "y": 200
       },
       "params": {},
       "notes": "1.5 · Crea clave compuesta gen#chr#pos#ref#alt en drivers.",
@@ -87,8 +87,8 @@
       "label": "Joiner (Left Outer Join)",
       "layer": "silver",
       "position": {
-        "x": 664.0098284476554,
-        "y": 52.68835118751038
+        "x": 660,
+        "y": 60
       },
       "params": {},
       "notes": "1.6 · Cruza MAF × drivers; 167 mutaciones cruzan con driver status.",
@@ -101,8 +101,8 @@
       "label": "Regex Extractor (p.His1047Arg)",
       "layer": "silver",
       "position": {
-        "x": 774.3350962603112,
-        "y": 224.5120982810165
+        "x": 660,
+        "y": 220
       },
       "params": {},
       "notes": "2.1 · Extrae cambio proteico eliminando prefijo 'p.'.",
@@ -115,8 +115,8 @@
       "label": "Cell Replacer (3 → 1 letra aa)",
       "layer": "silver",
       "position": {
-        "x": 720.1482657919503,
-        "y": 440.2057382494604
+        "x": 660,
+        "y": 380
       },
       "params": {},
       "notes": "2.2 · Traduce códigos de 3 letras a letra única estándar (His->H, Arg->R).",
@@ -129,8 +129,8 @@
       "label": "String Manip. (H1047R)",
       "layer": "silver",
       "position": {
-        "x": 722.0174095526766,
-        "y": 723.9891077842138
+        "x": 660,
+        "y": 540
       },
       "params": {},
       "notes": "2.3 · Consolida protein_change normalizado y exporta silver unificado (GRCh37).",
@@ -143,8 +143,8 @@
       "label": "Ref. Row Filter (15 genes clave)",
       "layer": "gold",
       "position": {
-        "x": 1072.4084800420749,
-        "y": 63.655824406244804
+        "x": 980,
+        "y": 60
       },
       "params": {},
       "notes": "3.1 · Filtra exclusivamente los 15 genes diana del proyecto (Tier 1-3).",
@@ -157,8 +157,8 @@
       "label": "Row Filter (solo missense)",
       "layer": "gold",
       "position": {
-        "x": 1347.2458461357471,
-        "y": 89.24659524995849
+        "x": 1240,
+        "y": 60
       },
       "params": {},
       "notes": "3.2 · Retiene solo variantes con Variant_Classification = 'Missense_Mutation'.",
@@ -171,8 +171,8 @@
       "label": "Row Filter (cambio resuelto)",
       "layer": "gold",
       "position": {
-        "x": 1375.9243688756019,
-        "y": 228.1679226872613
+        "x": 1240,
+        "y": 220
       },
       "params": {},
       "notes": "3.3 · Descarta variantes sin protein_change resuelto.",
@@ -185,8 +185,8 @@
       "label": "GroupBy (gen + cambio)",
       "layer": "gold",
       "position": {
-        "x": 1363.170215011349,
-        "y": 443.86156265570514
+        "x": 980,
+        "y": 380
       },
       "params": {},
       "notes": "3.4 · Agrupa por gen y variante, contando pacientes únicos.",
@@ -199,8 +199,8 @@
       "label": "Math Formula (÷ 134 × 100)",
       "layer": "gold",
       "position": {
-        "x": 1421.095333001162,
-        "y": 620.8643943247248
+        "x": 1240,
+        "y": 380
       },
       "params": {},
       "notes": "3.5 · Porcentaje de la cohorte sobre N=134.",
@@ -213,8 +213,8 @@
       "label": "Rule Engine (5% · 1% · 0.5%)",
       "layer": "gold",
       "position": {
-        "x": 1805.607431282179,
-        "y": 184.29802981232356
+        "x": 1240,
+        "y": 540
       },
       "params": {},
       "notes": "3.6 · Clasificación por umbrales: Patogénica, Probable Patogénica, VUS, Baja Frecuencia.",
@@ -227,8 +227,8 @@
       "label": "Sorter → CSV (top_variants · 49)",
       "layer": "gold",
       "position": {
-        "x": 1800.7742302981228,
-        "y": 364.6520338537342
+        "x": 1240,
+        "y": 700
       },
       "params": {},
       "notes": "3.7 · Ordena por freq DESC, asigna rank y persiste top_variants (49 variantes).",
@@ -241,8 +241,8 @@
       "label": "mutation_stats (distribuciones por gen)",
       "layer": "gold",
       "position": {
-        "x": 1074.8456963129047,
-        "y": 234.83736609367216
+        "x": 980,
+        "y": 220
       },
       "params": {},
       "notes": "Insumo Gold 2 · Distribución por gen (top 20) y por tipo de variante (28 114 variantes).",
@@ -255,8 +255,8 @@
       "label": "Excel Reader (MOESM4 Clinical)",
       "layer": "bronze",
       "position": {
-        "x": 40.0,
-        "y": 300.0
+        "x": 40,
+        "y": 420
       },
       "params": {},
       "notes": "M5a · Lee la hoja Features de MOESM4 (204 muestras con edad, subtipo IHC, PAM50, grado SBR).",
@@ -269,8 +269,8 @@
       "label": "Clinical Normalizer (IHC · PAM50 · SBR)",
       "layer": "silver",
       "position": {
-        "x": 700.0,
-        "y": 300.0
+        "x": 660,
+        "y": 700
       },
       "params": {},
       "notes": "M5a · Normaliza grupos de edad, clasificaciones IHC, PAM50 y grado histológico.",
@@ -283,8 +283,8 @@
       "label": "variant_clinical_summary (M5b)",
       "layer": "gold",
       "position": {
-        "x": 2900.0,
-        "y": 60.0
+        "x": 980,
+        "y": 540
       },
       "params": {},
       "notes": "M5b · Enriquecimiento clínico: edad media, subtipo predominante, PAM50 y grado SBR por variante priorizada.",

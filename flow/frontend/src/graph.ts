@@ -6,8 +6,6 @@ import type {
   WorkflowRuntime,
 } from "./types";
 
-export const LANE_WIDTH = 320;
-export const LANE_HEIGHT = 980;
 export const LANE_ORDER: Layer[] = ["landing", "bronze", "silver", "gold"];
 
 export const LAYER_COLORS: Record<Layer, string> = {
@@ -17,18 +15,53 @@ export const LAYER_COLORS: Record<Layer, string> = {
   gold: "#7c3aed",
 };
 
+const DEFAULT_LANE_WIDTH = 320;
+const NODE_WIDTH_ESTIMATE = 250;
+const LANE_PADDING = 30;
+
+export function dynamicLaneNodes(workflow?: Workflow): Node[] {
+  // Calcular límites por capa
+  let currentX = 0;
+  const nodes = workflow?.nodes ?? [];
+  
+  // Altura máxima basada en los nodos existentes
+  const maxY = nodes.reduce((acc, n) => Math.max(acc, n.position.y + 160), 980);
+  const laneHeight = Math.max(maxY + 40, 980);
+
+  return LANE_ORDER.map((layer) => {
+    const layerNodes = nodes.filter((n) => n.layer === layer);
+    let width = DEFAULT_LANE_WIDTH;
+    let startX = currentX;
+
+    if (layerNodes.length > 0) {
+      const minNodeX = Math.min(...layerNodes.map((n) => n.position.x));
+      const maxNodeX = Math.max(...layerNodes.map((n) => n.position.x));
+      // Abarca desde la posición del nodo más a la izquierda hasta el más a la derecha + ancho del nodo
+      const span = maxNodeX - minNodeX + NODE_WIDTH_ESTIMATE + LANE_PADDING * 2;
+      width = Math.max(DEFAULT_LANE_WIDTH, span);
+      // Alineamos la swimlane para que empiece justo antes del primer nodo si es necesario
+      startX = Math.min(currentX, minNodeX - LANE_PADDING);
+    }
+
+    const laneNode: Node = {
+      id: `lane_${layer}`,
+      type: "lane",
+      position: { x: startX, y: 0 },
+      data: { layer, color: LAYER_COLORS[layer] },
+      draggable: false,
+      selectable: false,
+      connectable: false,
+      zIndex: -1,
+      style: { width, height: laneHeight },
+    };
+
+    currentX = startX + width;
+    return laneNode;
+  });
+}
+
 export function laneNodes(): Node[] {
-  return LANE_ORDER.map((layer, index) => ({
-    id: `lane_${layer}`,
-    type: "lane",
-    position: { x: index * LANE_WIDTH, y: 0 },
-    data: { layer, color: LAYER_COLORS[layer] },
-    draggable: false,
-    selectable: false,
-    connectable: false,
-    zIndex: -1,
-    style: { width: LANE_WIDTH, height: LANE_HEIGHT },
-  }));
+  return dynamicLaneNodes();
 }
 
 export function buildNodes(
@@ -41,7 +74,7 @@ export function buildNodes(
     (runtime?.nodes ?? []).map((item) => [item.id, item]),
   );
   return [
-    ...laneNodes(),
+    ...dynamicLaneNodes(workflow),
     ...workflow.nodes.map((node) => ({
       id: node.id,
       type: "etl",

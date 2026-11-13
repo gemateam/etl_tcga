@@ -16,8 +16,8 @@
       "label": "Excel Reader (MOESM8 MAF)",
       "layer": "bronze",
       "position": {
-        "x": 40.0,
-        "y": 60.0
+        "x": 40,
+        "y": 60
       },
       "params": {},
       "notes": "1.1 · Lee la hoja 'HM maf' de MOESM8 (28 114 variantes, 134 pacientes).",
@@ -30,8 +30,8 @@
       "label": "String Manip. (clave MAF)",
       "layer": "bronze",
       "position": {
-        "x": 260.0,
-        "y": 60.0
+        "x": 350,
+        "y": 60
       },
       "params": {},
       "notes": "1.2 · Crea clave compuesta gen#chr#pos#ref#alt en el MAF.",
@@ -44,8 +44,8 @@
       "label": "Excel Reader (MOESM9 drivers)",
       "layer": "bronze",
       "position": {
-        "x": 40.0,
-        "y": 180.0
+        "x": 40,
+        "y": 240
       },
       "params": {},
       "notes": "1.3 · Lee la hoja 'Driver mutation in HM' (127 variantes driver).",
@@ -58,8 +58,8 @@
       "label": "Regex Extractor (chr·pos·ref·alt)",
       "layer": "bronze",
       "position": {
-        "x": 229.3010188042981,
-        "y": 396.7534126848042
+        "x": 350,
+        "y": 360
       },
       "params": {},
       "notes": "1.4 · Parsea notación chrN:g.POSref>alt a columnas estructuradas.",
@@ -72,8 +72,8 @@
       "label": "String Manip. (clave drivers)",
       "layer": "bronze",
       "position": {
-        "x": 482.7908164723365,
-        "y": 263.724494170096
+        "x": 350,
+        "y": 200
       },
       "params": {},
       "notes": "1.5 · Crea clave compuesta gen#chr#pos#ref#alt en drivers.",
@@ -86,8 +86,8 @@
       "label": "Joiner (Left Outer Join)",
       "layer": "silver",
       "position": {
-        "x": 480.0,
-        "y": 60.0
+        "x": 660,
+        "y": 60
       },
       "params": {},
       "notes": "1.6 · Cruza MAF × drivers; 167 mutaciones cruzan con driver status.",
@@ -100,8 +100,8 @@
       "label": "Regex Extractor (p.His1047Arg)",
       "layer": "silver",
       "position": {
-        "x": 700.0,
-        "y": 60.0
+        "x": 660,
+        "y": 220
       },
       "params": {},
       "notes": "2.1 · Extrae cambio proteico eliminando prefijo 'p.'.",
@@ -114,8 +114,8 @@
       "label": "Cell Replacer (3 → 1 letra aa)",
       "layer": "silver",
       "position": {
-        "x": 920.0,
-        "y": 60.0
+        "x": 660,
+        "y": 400
       },
       "params": {},
       "notes": "2.2 · Traduce códigos de 3 letras a letra única estándar (His->H, Arg->R).",
@@ -128,8 +128,8 @@
       "label": "String Manip. (H1047R)",
       "layer": "silver",
       "position": {
-        "x": 1140.0,
-        "y": 60.0
+        "x": 660,
+        "y": 580
       },
       "params": {},
       "notes": "2.3 · Consolida protein_change normalizado y exporta silver unificado (GRCh37).",
@@ -142,8 +142,8 @@
       "label": "Ref. Row Filter (15 genes clave)",
       "layer": "gold",
       "position": {
-        "x": 1360.0,
-        "y": 60.0
+        "x": 980,
+        "y": 60
       },
       "params": {},
       "notes": "3.1 · Filtra exclusivamente los 15 genes diana del proyecto (Tier 1-3).",
@@ -156,8 +156,8 @@
       "label": "Row Filter (solo missense)",
       "layer": "gold",
       "position": {
-        "x": 1580.0,
-        "y": 60.0
+        "x": 1240,
+        "y": 60
       },
       "params": {},
       "notes": "3.2 · Retiene solo variantes con Variant_Classification = 'Missense_Mutation'.",
@@ -170,8 +170,8 @@
       "label": "Row Filter (cambio resuelto)",
       "layer": "gold",
       "position": {
-        "x": 1800.0,
-        "y": 60.0
+        "x": 1240,
+        "y": 220
       },
       "params": {},
       "notes": "3.3 · Descarta variantes sin protein_change resuelto.",
@@ -184,8 +184,8 @@
       "label": "GroupBy (gen + cambio)",
       "layer": "gold",
       "position": {
-        "x": 2020.0,
-        "y": 60.0
+        "x": 980,
+        "y": 420
       },
       "params": {},
       "notes": "3.4 · Agrupa por gen y variante, contando pacientes únicos.",
@@ -198,8 +198,8 @@
       "label": "Math Formula (÷ 134 × 100)",
       "layer": "gold",
       "position": {
-        "x": 2240.0,
-        "y": 60.0
+        "x": 1240,
+        "y": 420
       },
       "params": {},
       "notes": "3.5 · Porcentaje de la cohorte sobre N=134.",
@@ -212,8 +212,8 @@
       "label": "Rule Engine (5% · 1% · 0.5%)",
       "layer": "gold",
       "position": {
-        "x": 2460.0,
-        "y": 60.0
+        "x": 1240,
+        "y": 600
       },
       "params": {},
       "notes": "3.6 · Clasificación por umbrales: Patogénica, Probable Patogénica, VUS, Baja Frecuencia.",
@@ -226,8 +226,8 @@
       "label": "Sorter → CSV (top_variants · 49)",
       "layer": "gold",
       "position": {
-        "x": 2680.0,
-        "y": 60.0
+        "x": 1240,
+        "y": 760
       },
       "params": {},
       "notes": "3.7 · Ordena por freq DESC, asigna rank y persiste top_variants (49 variantes).",
@@ -240,8 +240,8 @@
       "label": "mutation_stats (distribuciones por gen)",
       "layer": "gold",
       "position": {
-        "x": 1360.0,
-        "y": 180.0
+        "x": 980,
+        "y": 220
       },
       "params": {},
       "notes": "Insumo Gold 2 · Distribución por gen (top 20) y por tipo de variante (28 114 variantes).",
