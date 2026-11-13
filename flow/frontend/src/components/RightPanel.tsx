@@ -103,6 +103,7 @@ export function RightPanel({
   const [nodeSourceError, setNodeSourceError] = useState<string | null>(null);
   const [nodeSourceLoading, setNodeSourceLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isCodeFullscreen, setIsCodeFullscreen] = useState(false);
 
   useEffect(() => {
     setTab("description");
@@ -120,6 +121,7 @@ export function RightPanel({
     setNodeSource(null);
     setNodeSourceError(null);
     setCopied(false);
+    setIsCodeFullscreen(false);
   }, [node?.id, catalog?.key]);
 
   const outputOptions = catalog?.output_specs ?? [];
@@ -558,14 +560,23 @@ export function RightPanel({
             {nodeSourceError && <p className="error-text">{nodeSourceError}</p>}
             {nodeSource && (
               <>
-                <p className="code-module-label">
-                  <span>📦</span>
-                  <span>
-                    <strong>{nodeSource.module}</strong>
-                    <span style={{ color: "var(--muted)", margin: "0 4px" }}>›</span>
-                    <code style={{ fontSize: "10.5px" }}>{nodeSource.function}()</code>
-                  </span>
-                </p>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" }}>
+                  <p className="code-module-label" style={{ margin: 0 }}>
+                    <span>📦</span>
+                    <span>
+                      <strong>{nodeSource.module}</strong>
+                      <span style={{ color: "var(--muted)", margin: "0 4px" }}>›</span>
+                      <code style={{ fontSize: "10.5px" }}>{nodeSource.function}()</code>
+                    </span>
+                  </p>
+                  <button
+                    className="fullscreen-btn"
+                    onClick={() => setIsCodeFullscreen(true)}
+                    title="Abrir código en pantalla completa"
+                  >
+                    ⛶ Pantalla completa
+                  </button>
+                </div>
                 <div className="code-block-wrap">
                   <button
                     className="code-copy-btn"
@@ -716,6 +727,60 @@ export function RightPanel({
                   Siguiente
                 </button>
               </div>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {isCodeFullscreen && nodeSource && (
+        <div className="table-fullscreen-overlay" onClick={() => setIsCodeFullscreen(false)}>
+          <div className="table-fullscreen-modal" onClick={(e) => e.stopPropagation()}>
+            <header className="table-fullscreen-header">
+              <div>
+                <h3>
+                  <span>🐍</span> Código fuente: {node.label}
+                </h3>
+                <span style={{ fontSize: "12px", color: "var(--muted)" }}>
+                  <strong>{nodeSource.module}</strong>
+                  <span style={{ margin: "0 4px" }}>›</span>
+                  <code style={{ fontSize: "11px" }}>{nodeSource.function}()</code>
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <button
+                  className="ghost"
+                  style={{ fontSize: "12px", padding: "4px 10px", background: "#1e293b", border: "1px solid #334155", color: "#94a3b8" }}
+                  title="Copiar código al portapapeles"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(nodeSource.code).then(() => {
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    });
+                  }}
+                >
+                  {copied ? "✓ Copiado" : "⎘ Copiar"}
+                </button>
+                <button
+                  className="ghost"
+                  onClick={() => setIsCodeFullscreen(false)}
+                  style={{ fontSize: "14px", padding: "4px 10px" }}
+                  title="Cerrar pantalla completa (Esc)"
+                >
+                  ✕ Cerrar
+                </button>
+              </div>
+            </header>
+
+            <div className="table-fullscreen-body" style={{ padding: "0" }}>
+              <pre className="code-block" style={{ maxHeight: "none", height: "100%", borderRadius: "0", border: "none", margin: 0, padding: "20px 24px" }}>
+                <code>{nodeSource.code}</code>
+              </pre>
+            </div>
+
+            <footer className="table-fullscreen-footer">
+              <span style={{ fontSize: "11px", color: "var(--muted)", fontFamily: "monospace" }}>
+                {nodeSource.code.split("\n").length} líneas · {nodeSource.language}
+              </span>
             </footer>
           </div>
         </div>
