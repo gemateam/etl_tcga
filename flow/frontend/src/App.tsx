@@ -429,15 +429,14 @@ function FlowApp() {
       )}
 
       <div className={`layout${collapseLeft ? " left-collapsed" : ""}${collapseRight ? " right-collapsed" : ""}`}>
-        {!collapseLeft && (
-          <LeftPanel
-            workflows={config?.workflows ?? []}
-            activeId={activeId}
-            onSelect={setActiveId}
-            catalog={catalog}
-            onToggleCollapse={() => setCollapseLeft(true)}
-          />
-        )}
+        <LeftPanel
+          workflows={config?.workflows ?? []}
+          activeId={activeId}
+          onSelect={setActiveId}
+          catalog={catalog}
+          collapsed={collapseLeft}
+          onToggleCollapse={() => setCollapseLeft((val) => !val)}
+        />
 
         <main
           className="flow-canvas"

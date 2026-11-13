@@ -7,10 +7,18 @@ interface Props {
   activeId: string | null;
   onSelect: (id: string) => void;
   catalog: CatalogNode[];
+  collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
 
-export function LeftPanel({ workflows, activeId, onSelect, catalog, onToggleCollapse }: Props) {
+export function LeftPanel({
+  workflows,
+  activeId,
+  onSelect,
+  catalog,
+  collapsed = false,
+  onToggleCollapse,
+}: Props) {
   const [tab, setTab] = useState<"workflows" | "nodes">("workflows");
   const grouped = useMemo(() => {
     const result = new Map<Layer, CatalogNode[]>();
@@ -20,6 +28,38 @@ export function LeftPanel({ workflows, activeId, onSelect, catalog, onToggleColl
     }
     return result;
   }, [catalog]);
+
+  const activeWorkflow = useMemo(
+    () => workflows.find((w) => w.id === activeId) ?? null,
+    [workflows, activeId],
+  );
+
+  if (collapsed) {
+    return (
+      <aside className="left-panel collapsed-rail">
+        <button
+          className="rail-expand-btn"
+          onClick={onToggleCollapse}
+          title="Expandir panel izquierdo"
+        >
+          ❯
+        </button>
+        {activeWorkflow && (
+          <div
+            className="rail-badge-container"
+            onClick={onToggleCollapse}
+            title={`${activeWorkflow.name} (${activeWorkflow.node_count} nodos) - Clic para expandir`}
+          >
+            <div className="rail-icon">⚡</div>
+            <div className="rail-vertical-text">{activeWorkflow.name}</div>
+            <div className="rail-meta-pill">
+              {activeWorkflow.node_count} nodos
+            </div>
+          </div>
+        )}
+      </aside>
+    );
+  }
 
   return (
     <aside className="left-panel">
