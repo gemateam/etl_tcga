@@ -647,19 +647,25 @@ El código de este repositorio se distribuye bajo la licencia MIT. Los datos del
 
 ## Despliegue en Render
 
-El proyecto incluye configuración para desplegar en **Render** (https://render.com) usando Blueprints. La configuración está en [`render.yaml`](./render.yaml) y tiene:
+El ETL y el ejecutor visual `flow` se ejecutan en local; en **Render** solo se publica el reporteador. La configuración está en [`render.yaml`](./render.yaml), ajustada a los recursos gratuitos (0 $/mes):
 
-1. **PostgreSQL administrado** (plan gratis)
-2. **Web Service** (FastAPI en puerto dinámico)
-3. **Worker/Job** para ejecutar el ETL manualmente
+1. **PostgreSQL free** (`tcga-postgres`, versión 18, 1 GB; caduca a los 30 días)
+2. **`tcga-web`**: reporteador FastAPI free (512 MB, sin disco persistente ni SSH)
 
-Consulta las instrucciones detalladas en [README_RENDER.md](./README_RENDER.md).
+La base de datos se sube desde el PC con [`scripts/render_sync.py`](./scripts/render_sync.py):
+
+```powershell
+python scripts/render_sync.py db --dry-run   # ver configuración y filas locales
+python scripts/render_sync.py db             # pg_dump local -> pg_restore en Render
+```
+
+Con el plan free la web funciona con todo lo que vive en PostgreSQL (casos, genes, mutaciones, gold, GEMAMX), pero las páginas de expresión y los reportes por caso quedan vacías: no hay disco donde dejar los Parquet. El modo `files` (`python scripts/render_sync.py all`) queda reservado para un plan pagado (~14 $/mes). Consulta requisitos, verificación y limitaciones en [README_RENDER.md](./README_RENDER.md).
 
 ### Enlaces rápidos
-- [Blueprint `render.yaml`](./render.yaml) - Configuración automática
-- [Dockerfile para Render (web)](./web/Dockerfile.render)
-- [Dockerfile para Render (ETL)](./etl/Dockerfile.render)
-- [Instrucciones completas](./README_RENDER.md)
+- [Blueprint `render.yaml`](./render.yaml) - PostgreSQL 18 free + web free
+- [Dockerfile del reporteador para Render](./web/Dockerfile.render)
+- [Script de sincronización](./scripts/render_sync.py)
+- [Instrucciones completas de Render](./README_RENDER.md)
 
 ---
 

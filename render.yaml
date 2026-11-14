@@ -1,18 +1,48 @@
 # Render Blueprint: TCGA Medallion
 # https://dashboard.render.com/blueprints
-# Plan gratis: PostgreSQL + Web Service (no workers disponibles)
+#
+# Modelo de despliegue:
+#   * El ETL y el ejecutor visual `flow` se ejecutan en LOCAL (Docker Desktop).
+#   * En Render solo vive el reporteador `tcga-web`.
+#   * La base de datos PostgreSQL de Render se rellena con
+#     scripts/render_sync.py (pg_dump local -> pg_restore por la URL externa).
+#
+# Recursos (plan free, 0 $/mes):
+#   * tcga-web      : Web Service free (512 MB, se duerme a los 15 min, sin
+#                     disco persistente y sin SSH).
+#   * tcga-postgres : PostgreSQL 18 free (1 GB, caduca a los 30 dias de su
+#                     creacion).
+#
+# Limitaciones del plan free:
+#   * Sin disco persistente ni SSH -> NO se pueden subir los Parquet: las
+#     paginas de expresion y los reportes por caso quedan vacias.
+#   * Todo lo que vive en PostgreSQL (casos, genes, mutaciones, gold, estado,
+#     GEMAMX) si funciona.
+#   * PostgreSQL free se elimina a los 30 dias.
+#
+# Para tener la web completa (expresion + reportes) hay que subir a:
+#   tcga-web 0.5c-512mb (7 $/mes) + disco 4 GB (1 $/mes) + PostgreSQL
+#   0.1c-256mb (6 $/mes) ~= 14 $/mes, y ejecutar tambien `render_sync.py files`.
+# Ver README_RENDER.md.
 
 version: "1"
 services:
-  # Servicio web (FastAPI + Jinja2 + HTMX + Plotly)
-  # También ejecutará el ETL manualmente via shell
+  # ------------------------------------------------------------------- web
   - type: web
     name: tcga-web
-    plan: free
     runtime: docker
-    dockerfilePath: ./web/Dockerfile.render.unified
+    # El ETL no se ejecuta en Render; la imagen solo instala dependencias web.
+    dockerfilePath: ./web/Dockerfile.render
+    # Contexto raiz (monorepo): la imagen copia web/.
+    dockerContext: .
+    # Free: 512 MB de RAM y sin disco. La imagen funciona igual con /data
+    # efimero; si algun dia se añade disco, solo cambia este bloque.
+    plan: free
     healthCheckPath: /health
     envVars:
+      - key: DATA_DIR
+        value: /data
+      # Conexion interna (red privada de Render, sin SSL ni salida a Internet).
       - key: POSTGRES_HOST
         fromDatabase:
           name: tcga-postgres
@@ -33,32 +63,29 @@ services:
         fromDatabase:
           name: tcga-postgres
           property: password
+      # Sin Parquet en el plan free, pero se deja holgado para 512 MB de RAM.
       - key: DUCKDB_MEMORY_LIMIT
-        value: 512MB
+        value: 256MB
       - key: DUCKDB_THREADS
-        value: "2"
+        value: "1"
       - key: GDC_PROJECTS
         value: TCGA-BRCA
       - key: LOG_LEVEL
         value: INFO
-      - key: DATA_DIR
-        value: /data
-      - key: SQL_DIR
-        value: /sql
-      - key: RENDER_DEPLOYMENT
-        value: "true"
-      # Para ETL manual
-      - key: DATABASE_URL
-        fromDatabase:
-          name: tcga-postgres
-          property: connectionString
 
 databases:
-  # Base de datos PostgreSQL administrada
+  # Plan free: 1 GB. El esquema actual ocupa ~390 MB, asi que cabe.
+  # OJO: Render elimina las bases free a los 30 dias de su creacion.
+  # `postgresMajorVersion` debe coincidir con la base existente (18); no se
+  # puede cambiar despues. scripts/render_sync.py usa el cliente 18, que
+  # restaura sin problema volcados del PostgreSQL 16 local.
   - name: tcga-postgres
     plan: free
+    postgresMajorVersion: "18"
     databaseName: tcga
     user: tcga_admin
+    # Necesario para restaurar desde el PC con scripts/render_sync.py.
+    # La conexion interna de la web no depende de esta lista.
     ipAllowList:
       - source: 0.0.0.0/0
         description: everywhere

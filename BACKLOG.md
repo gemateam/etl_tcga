@@ -307,3 +307,24 @@ Como operador, quiero relanzar pasos del pipeline sin duplicar datos ni perder t
 ### Feature F7.3. Flujos GEMAMX en esquema medallón
 - **HU-7.3.1. GEMAMX v2 (Romero-Córdoba 2021 HM)**: Ingesta de MOESM8 (28 114 variantes, 134 pacientes) y MOESM9 (127 drivers), normalización a GRCh37, top 49 variantes (rank 1 PIK3CA H1047R freq=15) y FASTA con cuarentena (GATA3 L328H y M294K).
 - **HU-7.3.2. GEMAMX v1 (TCGA-BRCA cBioPortal)**: Ingesta de mutaciones, 15 genes diana, secuencias WT validadas, ranking top-20 y mutantes FASTA.
+
+## Épica E8. Publicación del reporteador en Render (procesamiento local)
+
+**Objetivo:** publicar `tcga-web` en Render manteniendo el ETL, el ejecutor visual y los datos crudos en el PC; subir solo los artefactos procesados que consume la web.
+
+### Feature F8.1. Blueprint del servicio web
+- **HU-8.1.1. Un solo servicio en Render**: `render.yaml` declara `tcga-web` (Docker, `plan: free`, sin disco) y PostgreSQL 18 free (`tcga-postgres`, 1 GB). El lienzo `flow` no se despliega. Las páginas de expresión y los reportes por caso quedan vacías en free porque `/data` es efímero.
+- **HU-8.1.2. Imagen de solo lectura**: `web/Dockerfile.render` instala únicamente dependencias web con `uv`, arranca como root solo para preparar `/data` y ejecuta uvicorn como `app` (UID 10001).
+- **HU-8.1.3. Acceso SSH**: la imagen prepara `~/.ssh` (0700); el plan free no permite SSH, así que solo se usa si se sube a un plan pagado.
+- **Estado:** Implementada. Pendiente de aplicar el Blueprint en la cuenta de Render (servicios ya creados: `tcga-web` y `tcga-postgres`).
+
+### Feature F8.2. Sincronización local -> Render
+- **HU-8.2.1. Base de datos**: `scripts/render_sync.py db` hace `pg_dump` del contenedor local y `pg_restore --clean --if-exists --single-transaction` (cliente `postgres:18`) sobre la URL externa, con la contraseña en un fichero de entorno temporal y verificación de recuentos.
+- **HU-8.2.2. Ficheros**: `scripts/render_sync.py files` sube por streaming `tar | ssh` las rutas `silver/case_expressions` y `case_reports`, comprueba espacio libre, ajusta permisos y verifica tamaños. Gold y GEMAMX no se suben: la web los consulta en PostgreSQL. Requiere plan pagado con disco.
+- **HU-8.2.3. Modos y seguridad**: modos `db`, `files` y `all`; `--dry-run` (configuración y recuentos locales), `--only`, `-y`, `--keep-dump`; `.env.render` fuera de Git; la contraseña nunca se imprime.
+- **Estado:** Implementada. Validada de extremo a extremo contra PostgreSQL 18.7 (volcado de ~31 MB, segunda pasada idempotente y recuentos coincidentes: mutaciones 89.568, casos 1.098, `gold.cx_pivot` 1.226).
+
+### Feature F8.3. Documentación y verificación
+- **HU-8.3.1. Guía de despliegue**: `README_RENDER.md` describe topología, límites del plan free, requisitos, pasos, ciclo de actualización, seguridad, resolución de problemas y la alternativa pagada.
+- **HU-8.3.2. Pruebas sin red**: `tests/test_render_sync.py` cubre el parseo de la URL, el enmascarado de credenciales, el catálogo de rutas y la lectura de `.env.render`.
+- **Estado:** Implementada.

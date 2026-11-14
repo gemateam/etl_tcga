@@ -1,6 +1,7 @@
 # Secretos — nunca versionar
 .env
 *.env
+.env.render
 
 # Datos descargados — demasiado grandes para git
 data/

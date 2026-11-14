@@ -1,48 +1,68 @@
-# Dockerfile para Render (Web Service)
-# Basado en web/Dockerfile pero con adaptaciones:
-# - Usa $PORT (Render asigna puerto dinámico)
-# - Instala dependencias con pip (Render no tiene uv en runtime)
-# - Expone puerto dinámico
+# syntax=docker/dockerfile:1.7
+# ---------------------------------------------------------------------------
+# Imagen del reporteador para Render.
+#
+# Modelo: el ETL se ejecuta en local y en Render solo corre la web, leyendo los
+# Parquet/Gold que se suben al disco persistente montado en /data.
+#
+# Diferencias con `web/Dockerfile` (local):
+#   - Se instala con uv en multiplas etapas (Render compila con BuildKit).
+#   - No copia el codigo del ETL: aqui no se ejecuta ningun paso del pipeline.
+#   - Arranca como root solo para preparar el disco persistente y baja a `app`.
+#   - Deja ~/.ssh (0700) listo para que Render permita `ssh`/`scp` al servicio,
+#     que es como subimos los datos desde el PC.
+# ---------------------------------------------------------------------------
+FROM ghcr.io/astral-sh/uv:0.13.6 AS uv
 
-FROM python:3.12-slim-bookworm
+# ------------------------------------------------------------------ builder
+FROM python:3.12-slim-bookworm AS builder
 
-# Variables de entorno
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
-    DATA_DIR=/data \
-    SQL_DIR=/sql
+COPY --from=uv /uv /uvx /bin/
 
-# Crear usuario no-root
-RUN groupadd --gid 10001 app \
-    && useradd --uid 10001 --gid app --create-home --home-dir /home/app app \
-    && mkdir -p /data /app /sql \
-    && chown -R app:app /data /app /sql
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never \
+    PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
-# Copiar dependencias primero (para caché de capas)
 COPY web/pyproject.toml web/uv.lock ./
-# Instalar dependencias con pip (Render no tiene uv)
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r <(grep -v '^#' uv.lock | grep -v '^$' | awk -F'=' '{print $1}')
+RUN uv sync --frozen --no-install-project --no-dev
 
-# Copiar aplicación
-COPY web/app /app/app
+COPY web/app ./app
 
-# Script para iniciar con puerto dinámico
-RUN echo '#!/bin/sh\nexec uvicorn app.main:app --host 0.0.0.0 --port $PORT' > /app/start.sh \
-    && chmod +x /app/start.sh \
-    && chown -R app:app /app
+# ------------------------------------------------------------------ runtime
+FROM python:3.12-slim-bookworm AS runtime
 
-USER app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PATH="/app/.venv/bin:$PATH" \
+    DATA_DIR=/data
 
-# Exponer puerto dinámico (Render usa $PORT)
+RUN groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid app --create-home --home-dir /home/app \
+        --shell /bin/bash app \
+    && mkdir -p /data /app /home/app/.ssh /root/.ssh \
+    && chown -R app:app /data /app /home/app \
+    && chmod 0700 /home/app/.ssh /root/.ssh
+
+WORKDIR /app
+
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
+COPY --chown=app:app web/app /app/app
+COPY --chown=app:app web/pyproject.toml /app/pyproject.toml
+COPY --chown=app:app web/entrypoint.render.sh /app/entrypoint.render.sh
+
+RUN chmod +x /app/entrypoint.render.sh
+
 EXPOSE 10000
-# (Render ignora EXPOSE; usa $PORT interno)
 
-# Health check (usando el mismo puerto dinámico)
-HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=5 \
-    CMD python -c "import os, urllib.request; port=os.environ.get('PORT', '8000'); urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=3)"
+HEALTHCHECK --interval=20s --timeout=5s --start-period=20s --retries=5 \
+    CMD python -c "import os, urllib.request; port=os.environ.get('PORT', '10000'); urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=3)"
 
-CMD ["/app/start.sh"]
+# Root solo durante el entrypoint: ajusta /data y cede el proceso a `app`.
+USER root
+
+ENTRYPOINT ["/app/entrypoint.render.sh"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"]

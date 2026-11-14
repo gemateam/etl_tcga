@@ -457,7 +457,7 @@ _OUT_TABLE = Port(name="tabla", kind=PortKind.TABLE)
 def _run_read_moesm4_clinical(_params: Any, ctx: RunContext) -> RunResult:
     from .gemamx.v2_1 import read_moesm4_clinical
 
-    gemamx_dir = Path(getattr(ctx.settings, "gemamx_data_dir", "D:/RespaldoLaptopHP/ProyectosIA/GEMAMX"))
+    gemamx_dir = ctx.settings.gemamx_dir
     data_dir = ctx.settings.etl.data_dir
     res = read_moesm4_clinical(gemamx_dir, data_dir)
     return RunResult(

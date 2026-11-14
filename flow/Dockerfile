@@ -41,28 +41,36 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \
     FLOW_WORKFLOWS_DIR=/app/workflows \
+    FLOW_WORKFLOWS_SEED=/app/workflows-seed \
     FLOW_FRONTEND_DIST=/app/frontend/dist \
     DATA_DIR=/data \
     SQL_DIR=/sql
 
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home --home-dir /home/app app \
-    && mkdir -p /data /sql /app/workflows /app/frontend /gemamx \
+    && mkdir -p /data /sql /app/workflows /app/workflows-seed /app/frontend /gemamx \
     && chown -R app:app /data /sql /app /gemamx
 
 WORKDIR /app
 
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
-COPY --chown=app:app flow/workflows /app/workflows
+COPY --chown=app:app flow/workflows /app/workflows-seed
 COPY --chown=app:app flow/src /app/src
+COPY --chown=app:app flow/entrypoint.sh /app/entrypoint.sh
 COPY --chown=app:app sql /sql
 COPY --from=frontend --chown=app:app /frontend/dist /app/frontend/dist
 
-USER app
+RUN chmod +x /app/entrypoint.sh
+
+# En Render se compila con `FLOW_IMAGE_USER=root` (variable de entorno -> build
+# arg) para poder preparar el disco persistente y después bajar a `app`.
+ARG FLOW_IMAGE_USER=app
+USER ${FLOW_IMAGE_USER}
 
 EXPOSE 8100
 
 HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=5 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=3)"
+    CMD python -c "import os, urllib.request; port=os.environ.get('PORT', '8100'); urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=3)"
 
-CMD ["uvicorn", "tcga_flow.main:app", "--host", "0.0.0.0", "--port", "8100"]
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["sh", "-c", "exec uvicorn tcga_flow.main:app --host 0.0.0.0 --port ${PORT:-8100}"]
