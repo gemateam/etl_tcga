@@ -2,7 +2,7 @@
   "id": "gemamx_v1",
   "name": "GEMAMX v1 · TCGA-BRCA cBioPortal",
   "version": 2,
-  "description": "Pipeline medallón para TCGA-BRCA vía API de cBioPortal: ingesta de mutaciones somáticas, catálogo de genes, enriquecimiento de coordenadas y entrega en Gold de mutation_stats y top_variants (ranking completo missense).",
+  "description": "Pipeline medallón para TCGA-BRCA vía API REST de cBioPortal: ingesta directa de mutaciones somáticas del estudio completo y entrega en Gold de mutation_stats y top_variants (ranking completo missense en los genes clave).",
   "project_id": null,
   "variables": {
     "study_id": "brca_tcga",
@@ -14,44 +14,30 @@
     {
       "id": "fetch_mutations",
       "type": "gemamx_v1_fetch_mutations",
-      "label": "cBioPortal REST (JSON crudo)",
+      "label": "cBioPortal REST (mutaciones crudas)",
       "layer": "bronze",
       "position": {
-        "x": 363.4649006622517,
-        "y": 89.08609271523179
+        "x": 360.0,
+        "y": 140.0
       },
       "params": {},
-      "notes": "Bronce crudo · Carga mutaciones somáticas desde cBioPortal o fixture de respaldo.",
+      "notes": "Bronce crudo · Consulta API REST de cBioPortal (brca_tcga_mutations) para todo el estudio brca_tcga_all.",
       "status": "confirmed",
-      "description": "JSON crudo de la API de cBioPortal."
-    },
-    {
-      "id": "fetch_genes",
-      "type": "gemamx_v1_fetch_genes",
-      "label": "cBioPortal Genes (15 genes)",
-      "layer": "bronze",
-      "position": {
-        "x": 363.64000689245984,
-        "y": 254.03616202807322
-      },
-      "params": {},
-      "notes": "Bronce crudo · Mapeo de identificadores y 15 genes clave.",
-      "status": "confirmed",
-      "description": "Mapeo de Entrez IDs a Hugo Symbols."
+      "description": "Mutaciones somáticas crudas directamente desde la API REST de cBioPortal."
     },
     {
       "id": "normalize",
       "type": "gemamx_v1_normalize",
-      "label": "mutations (esquema común v1+v2)",
+      "label": "mutations (silver normalizado v1)",
       "layer": "silver",
       "position": {
-        "x": 667.1099337748344,
-        "y": 78.18278145695365
+        "x": 660.0,
+        "y": 140.0
       },
       "params": {},
-      "notes": "Plata limpio · Normaliza con cohorte='TCGA-BRCA-cBioPortal' y ensamble='GRCh37'.",
+      "notes": "Plata limpio · Normaliza mutaciones con cohorte='TCGA-BRCA-cBioPortal' y ensamble='GRCh37'.",
       "status": "confirmed",
-      "description": "Tabla silver unificada de mutaciones."
+      "description": "Tabla silver de mutaciones normalizadas v1."
     },
     {
       "id": "mutation_stats",
@@ -59,11 +45,11 @@
       "label": "mutation_stats (distribuciones)",
       "layer": "gold",
       "position": {
-        "x": 961.6688741721855,
-        "y": 60.0
+        "x": 960.0,
+        "y": 70.0
       },
       "params": {},
-      "notes": "Oro listo para pipelines · Distribución por gen y tipo de variante.",
+      "notes": "Oro listo para pipelines · Distribución por gen y tipo de variante de la cohorte completa.",
       "status": "confirmed",
       "description": "Insumo Gold 1: estadísticas de mutaciones."
     },
@@ -73,11 +59,11 @@
       "label": "top_variants (frecuencia y clase)",
       "layer": "gold",
       "position": {
-        "x": 970.7549668874173,
-        "y": 221.79602649006625
+        "x": 960.0,
+        "y": 210.0
       },
       "params": {},
-      "notes": "Oro listo para pipelines · Ranking completo de variantes missense en los genes clave (PIK3CA H1047R rank 1).",
+      "notes": "Oro listo para pipelines · Ranking completo de variantes missense en los genes clave sin truncar.",
       "status": "confirmed",
       "description": "Insumo Gold 2: ranking de variantes prioritarias."
     }
@@ -85,10 +71,6 @@
   "edges": [
     {
       "source": "fetch_mutations",
-      "target": "normalize"
-    },
-    {
-      "source": "fetch_genes",
       "target": "normalize"
     },
     {

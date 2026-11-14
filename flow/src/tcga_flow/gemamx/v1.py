@@ -51,13 +51,14 @@ UNIPROT_MAP = {
 
 
 def fetch_mutations(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
-    """Bronze: Consulta mutaciones reales directamente de la API REST de cBioPortal."""
+    """Bronze: Consulta mutaciones reales directamente de la API REST de cBioPortal (todas las mutaciones sin filtrar por gen)."""
     url = "https://www.cbioportal.org/api/molecular-profiles/brca_tcga_mutations/mutations/fetch?projection=DETAILED"
     ingested_at = datetime.now(timezone.utc).isoformat()
 
+    # Se consulta la lista completa de muestras brca_tcga_all sin filtrar entrezGeneIds
+    # para descargar todas las mutaciones somáticas del estudio (~60,864 mutaciones en 982 muestras)
     payload = json.dumps({
         "sampleListId": "brca_tcga_all",
-        "entrezGeneIds": list(GENE_ENTREZ_MAP.values())
     }).encode("utf-8")
 
     req = urllib.request.Request(
@@ -70,7 +71,7 @@ def fetch_mutations(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
         }
     )
 
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with urllib.request.urlopen(req, timeout=120) as resp:
         cbioportal_records = json.loads(resp.read().decode("utf-8"))
 
     entrez_to_hugo = {v: k for k, v in GENE_ENTREZ_MAP.items()}
@@ -102,7 +103,7 @@ def fetch_mutations(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
 
     return {
         "total_rows": len(raw_data),
-        "source": "cBioPortal API (brca_tcga_mutations)",
+        "source": "cBioPortal API (brca_tcga_mutations, all genes)",
         "out_file": str(out_file),
     }
 
@@ -154,45 +155,26 @@ def fetch_uniprot_fasta(gemamx_dir: Path, data_dir: Path) -> dict[str, Any]:
 
 
 def normalize_v1_mutations(data_dir: Path) -> dict[str, Any]:
-    """Silver: Normaliza mutaciones de cBioPortal con cohorte, ensamble y tier de genes en silver unificado."""
+    """Silver: Normaliza mutaciones de cBioPortal con cohorte y ensamble en silver unificado."""
     bronze_mut_file = data_dir / "gemamx" / "v1" / "bronze" / "cbio_mutations.parquet"
     if not bronze_mut_file.exists():
         raise FileNotFoundError(f"No existe {bronze_mut_file}")
 
-    bronze_genes_file = data_dir / "gemamx" / "v1" / "bronze" / "cbio_genes.parquet"
-
     con = duckdb.connect()
     try:
-        if bronze_genes_file.exists():
-            query = f"""
-                SELECT
-                    m.hugo_symbol,
-                    COALESCE(g.tier, 3) AS tier,
-                    m.variant_classification,
-                    m.protein_change,
-                    m.sample_id,
-                    m.chromosome,
-                    CAST(m.start_position AS BIGINT) AS start_position,
-                    'TCGA-BRCA-cBioPortal' AS cohorte,
-                    'GRCh37' AS ensamble
-                FROM read_parquet('{bronze_mut_file.as_posix()}') m
-                LEFT JOIN read_parquet('{bronze_genes_file.as_posix()}') g
-                    ON m.hugo_symbol = g.gene_symbol
-            """
-        else:
-            query = f"""
-                SELECT
-                    hugo_symbol,
-                    3 AS tier,
-                    variant_classification,
-                    protein_change,
-                    sample_id,
-                    chromosome,
-                    CAST(start_position AS BIGINT) AS start_position,
-                    'TCGA-BRCA-cBioPortal' AS cohorte,
-                    'GRCh37' AS ensamble
-                FROM read_parquet('{bronze_mut_file.as_posix()}')
-            """
+        query = f"""
+            SELECT
+                hugo_symbol,
+                variant_classification,
+                protein_change,
+                sample_id,
+                chromosome,
+                CAST(start_position AS BIGINT) AS start_position,
+                'TCGA-BRCA-cBioPortal' AS cohorte,
+                'GRCh37' AS ensamble
+            FROM read_parquet('{bronze_mut_file.as_posix()}')
+            WHERE hugo_symbol IS NOT NULL AND hugo_symbol <> ''
+        """
         df = con.execute(query).df()
     finally:
         con.close()
